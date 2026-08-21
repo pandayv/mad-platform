@@ -23,13 +23,12 @@ from pydantic import BaseModel
 from mad_platform.agents.action_agent import route_and_file
 from mad_platform.agents.analyst import RawFinding, analyze_page
 from mad_platform.agents.editor import VerifiedFinding, verify_findings
-from mad_platform.agents.reporter import RankedFinding, rank_and_recommend, render_reports
+from mad_platform.agents.reporter import RankedFinding, draft_report, rank_and_recommend
 from mad_platform.state import firestore_client as fs
 from mad_platform.state import storage_client
 from mad_platform.tools.crawler import PageSnapshot, fetch_page
 from mad_platform.tools.gemini_client import FLASH, FLASH_LITE, generate_structured
 from mad_platform.tools.issue_sink import IssueSink, MockIssueSink
-from mad_platform.tools.pdf_renderer import html_to_pdf
 
 MAX_ADDITIONAL_PAGES = 2
 
@@ -199,8 +198,7 @@ class ScanResult:
     job_id: str
     findings_by_page: dict[str, list[VerifiedFinding]]
     report: str
-    report_html: str
-    report_uris: dict[str, str]
+    report_uri: str
     report_folder_url: str
     filed: list[tuple[int, RankedFinding, str]]
     escalated: list[tuple[int, RankedFinding, str]]
@@ -257,9 +255,8 @@ async def run_one_time_scan(
         for index, _finding, _escalation_id in filing["escalated"]:
             ticket_by_finding[index] = None
 
-        bundle = render_reports(url, ranked, ticket_by_finding)
-        pdf_bytes = await html_to_pdf(bundle.html)
-        report_uris = storage_client.save_report_bundle(job_id, bundle.markdown, bundle.html, pdf_bytes)
+        report = draft_report(url, ranked, ticket_by_finding)
+        report_uri = storage_client.save_report(job_id, report)
         fs.complete_job(job_id)
     except Exception as exc:  # noqa: BLE001
         fs.fail_job(job_id, str(exc))
@@ -268,9 +265,8 @@ async def run_one_time_scan(
     return ScanResult(
         job_id=job_id,
         findings_by_page=results,
-        report=bundle.markdown,
-        report_html=bundle.html,
-        report_uris=report_uris,
+        report=report,
+        report_uri=report_uri,
         report_folder_url=storage_client.console_folder_url(),
         filed=filing["filed"],
         escalated=filing["escalated"],

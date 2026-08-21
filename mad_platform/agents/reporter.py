@@ -153,52 +153,6 @@ def generate_executive_summary(url: str, ranked: list[RankedFinding]) -> str:
     return result.summary
 
 
-@dataclass
-class ReportBundle:
-    markdown: str
-    html: str
-
-
-def _ticket_line_markdown(ticket: str | None) -> str:
-    return (
-        f"- **Jira ticket:** {ticket}" if ticket
-        else "- **Jira ticket:** _pending SME review before filing (REQUIREMENTS.md section 5.6)_"
-    )
-
-
-def _render_markdown(
-    url: str, generated_at: str, exec_summary: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None]
-) -> str:
-    lines = [
-        f"# Accessibility Report — {url}",
-        f"_Generated {generated_at}_",
-        "",
-        "## Summary",
-        exec_summary,
-        "",
-        f"**{len(ranked)} confirmed finding(s)**, severity-sorted below.",
-        "",
-        "## Findings",
-    ]
-
-    if not ranked:
-        lines.append("\nNo confirmed findings.")
-    else:
-        for i, r in enumerate(ranked):
-            lines += [
-                "",
-                f"### {i + 1}. [{r.severity.upper()}] WCAG {r.wcag_criterion}",
-                f"- **Page:** {r.page_url}",
-                f"- **Risk score:** {r.risk_score:.0f}/100",
-                f"- **Why it matters:** {r.risk_rationale}",
-                f"- **Evidence:** {r.editor_rationale}",
-                f"- **Suggested fix:** {r.suggested_fix}",
-                _ticket_line_markdown(ticket_by_finding.get(i)),
-            ]
-
-    return "\n".join(lines)
-
-
 # Severity -> (accent color, tint background), standard red/orange/amber/blue
 # risk-coding so the reader's eye sorts by severity before reading a word.
 _SEVERITY_STYLE = {
@@ -341,9 +295,19 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def _render_html(
-    url: str, generated_at: str, exec_summary: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None]
+def draft_report(
+    url: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None] | None = None
 ) -> str:
+    """The fixed report template -- same structure every run, only the data
+    changes. Single format (HTML): easiest to generate reliably, opens
+    anywhere, and is the one genuinely user-friendly format a business
+    owner would actually read (per REQUIREMENTS.md section 5.5 -- template
+    is fixed, only the executive summary is LLM-generated).
+    """
+    ticket_by_finding = ticket_by_finding or {}
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    exec_summary = generate_executive_summary(url, ranked)
+
     counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     for r in ranked:
         counts[r.severity.lower()] = counts.get(r.severity.lower(), 0) + 1
@@ -365,28 +329,3 @@ def _render_html(
         count=len(ranked),
         finding_cards=finding_cards,
     )
-
-
-def render_reports(
-    url: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None] | None = None
-) -> ReportBundle:
-    """Builds the Markdown and HTML versions of the report from the same
-    underlying data and a single executive-summary call -- both formats
-    must show identical findings and the same summary text, so the LLM
-    call happens once here rather than once per format.
-    """
-    ticket_by_finding = ticket_by_finding or {}
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    exec_summary = generate_executive_summary(url, ranked)
-
-    return ReportBundle(
-        markdown=_render_markdown(url, generated_at, exec_summary, ranked, ticket_by_finding),
-        html=_render_html(url, generated_at, exec_summary, ranked, ticket_by_finding),
-    )
-
-
-def draft_report(url: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None] | None = None) -> str:
-    """Back-compat convenience wrapper: Markdown only. Prefer render_reports
-    when both formats are needed, so the summary isn't generated twice.
-    """
-    return render_reports(url, ranked, ticket_by_finding).markdown
