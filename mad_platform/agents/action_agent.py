@@ -73,6 +73,7 @@ def route_and_file(sink: IssueSink, ranked: list[RankedFinding]) -> dict[str, li
             fs.create_escalation(
                 key,
                 {
+                    "kind": "finding",
                     "page_url": finding.page_url,
                     "wcag_criterion": finding.wcag_criterion,
                     "severity": finding.severity,

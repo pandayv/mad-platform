@@ -27,6 +27,7 @@ _client = firestore.Client(project=_PROJECT, database=_DATABASE)
 _JOBS = _client.collection("scan_jobs")
 _TICKETS = _client.collection("filed_tickets")  # idempotency_key -> ticket_id
 _ESCALATIONS = _client.collection("escalations")  # SME queue, per REQUIREMENTS.md section 5.6
+_KB_VERSION = _client.collection("knowledge_base_version").document("wcag")  # REQUIREMENTS.md section 8
 
 # Stages, in order -- used to answer "what's the next incomplete stage".
 PAGE_STAGES = ["crawled", "analyzed", "verified"]
@@ -170,6 +171,30 @@ def resolve_escalation(escalation_id: str, disposition: str, reviewer: str = "sm
         }
     )
     return data
+
+
+def get_kb_version() -> dict[str, Any] | None:
+    doc = _KB_VERSION.get()
+    return doc.to_dict() if doc.exists else None
+
+
+def touch_kb_check(checked_version: str) -> None:
+    """Records that a freshness check just ran, independent of whether the
+    version actually changed -- so "last checked" is always accurate even
+    on a no-op tick.
+    """
+    _KB_VERSION.set(
+        {"last_checked_version": checked_version, "last_checked_at": datetime.now(timezone.utc)},
+        merge=True,
+    )
+
+
+def set_kb_version(version: str) -> None:
+    """Called after a successful refresh (auto or SME-confirmed) -- this is
+    the "embedding version reference" REQUIREMENTS.md section 8 calls for,
+    i.e. which version the currently-stored embeddings actually reflect.
+    """
+    _KB_VERSION.set({"version": version, "updated_at": datetime.now(timezone.utc)}, merge=True)
 
 
 def _set_page_field(job_id: str, page_url: str, fields: dict) -> None:

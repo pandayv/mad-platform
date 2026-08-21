@@ -1,0 +1,17 @@
+# Lighter than Dockerfile (no Playwright/Chromium) -- scan-wcag-poller
+# never renders a page, it only fetches one small HTML page (requests)
+# and calls Gemini/Firestore. No point paying Chromium's install cost on
+# every cold start for a service that never uses it.
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY mad_platform ./mad_platform
+
+ENV PORT=8080
+EXPOSE 8080
+
+CMD ["sh", "-c", "uvicorn mad_platform.web.poller_app:app --host 0.0.0.0 --port ${PORT}"]
