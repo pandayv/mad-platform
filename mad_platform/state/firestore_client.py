@@ -88,6 +88,16 @@ def complete_job(job_id: str) -> None:
     _JOBS.document(job_id).update({"status": "completed", "updated_at": datetime.now(timezone.utc)})
 
 
+def save_scan_summary(job_id: str, summary: dict[str, Any]) -> None:
+    """Persists the final scan outcome (score, severity counts, report
+    location, ticket/escalation counts) onto the job record -- the web UI's
+    status endpoint reads this back rather than needing the in-process
+    ScanResult, since the request that started the scan and the request
+    that polls for its result are two different HTTP calls.
+    """
+    _JOBS.document(job_id).update({"summary": summary, "updated_at": datetime.now(timezone.utc)})
+
+
 def fail_job(job_id: str, error: str) -> None:
     _JOBS.document(job_id).update(
         {"status": "failed", "error": error, "updated_at": datetime.now(timezone.utc)}

@@ -217,21 +217,21 @@ async def run_one_time_scan(
     issue_sink = issue_sink or MockIssueSink()
     existing_job = fs.get_job(job_id) if job_id else None
 
-    if existing_job and existing_job.get("pages"):
-        # True resume: reuse the page list this job already decided on,
-        # rather than re-running page selection (a fresh LLM call isn't
-        # guaranteed to pick the same pages twice, and doesn't need to --
-        # resuming means continuing the same job, not re-deciding its scope).
-        pages = list(existing_job["pages"].keys())
-    else:
-        if job_id is None:
-            job_id = fs.create_job(url)
-        entry_snapshot = await fetch_page(url)
-        fs.checkpoint_page_crawled(job_id, url)
-        pages = select_pages(entry_snapshot)
-
-    results: dict[str, list[VerifiedFinding]] = {}
     try:
+        if existing_job and existing_job.get("pages"):
+            # True resume: reuse the page list this job already decided on,
+            # rather than re-running page selection (a fresh LLM call isn't
+            # guaranteed to pick the same pages twice, and doesn't need to --
+            # resuming means continuing the same job, not re-deciding its scope).
+            pages = list(existing_job["pages"].keys())
+        else:
+            if job_id is None:
+                job_id = fs.create_job(url)
+            entry_snapshot = await fetch_page(url)
+            fs.checkpoint_page_crawled(job_id, url)
+            pages = select_pages(entry_snapshot)
+
+        results: dict[str, list[VerifiedFinding]] = {}
         for page_url in pages:
             if fs.get_page_stage(job_id, page_url) == "verified":
                 job = fs.get_job(job_id)
@@ -259,7 +259,8 @@ async def run_one_time_scan(
         report_uri = storage_client.save_report(job_id, report)
         fs.complete_job(job_id)
     except Exception as exc:  # noqa: BLE001
-        fs.fail_job(job_id, str(exc))
+        if job_id is not None:  # only unset if fs.create_job itself is what failed
+            fs.fail_job(job_id, str(exc))
         raise
 
     return ScanResult(

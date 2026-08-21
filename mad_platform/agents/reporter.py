@@ -45,6 +45,29 @@ class RankedFinding:
     risk_rationale: str
 
 
+_SCORE_PENALTY = {"critical": 25, "high": 15, "medium": 8, "low": 3}
+
+
+def compute_score(ranked: list[RankedFinding]) -> int:
+    """A single 0-100 "site health" number for the UI's headline display --
+    not a WCAG-official metric, just 100 minus a severity-weighted penalty
+    per confirmed finding, clamped at 0. Deterministic Python over the
+    LLM's already-assigned severities, not another judgment call.
+    """
+    penalty = sum(_SCORE_PENALTY.get(r.severity.lower(), 5) for r in ranked)
+    return max(0, 100 - penalty)
+
+
+def score_color(score: int) -> str:
+    """Shared between the report template and the web UI so the same score
+    always reads as the same color in both places."""
+    if score >= 80:
+        return "#15803D"  # green
+    if score >= 50:
+        return "#A16207"  # amber
+    return "#B91C1C"  # red
+
+
 class _Recommendation(BaseModel):
     finding_index: int
     risk_score: float
@@ -222,10 +245,20 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     line-height: 1.5;
   }}
   .page {{ max-width: 820px; margin: 0 auto; padding: 40px 24px 56px; }}
-  header {{ border-bottom: 3px solid var(--brand); padding-bottom: 20px; margin-bottom: 28px; }}
+  header {{
+    border-bottom: 3px solid var(--brand); padding-bottom: 20px; margin-bottom: 28px;
+    display: flex; justify-content: space-between; align-items: center; gap: 20px;
+  }}
   .brand {{ font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand); font-weight: 700; }}
   h1 {{ font-size: 26px; margin: 6px 0 4px; word-break: break-word; }}
   .meta {{ color: var(--text-muted); font-size: 14px; }}
+  .score-badge {{
+    flex-shrink: 0; width: 84px; height: 84px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 4px solid; font-weight: 700;
+  }}
+  .score-badge .n {{ font-size: 26px; line-height: 1; }}
+  .score-badge .l {{ font-size: 9px; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.8; }}
   .summary-box {{
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 20px 24px; margin-bottom: 20px;
@@ -265,9 +298,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <body>
 <div class="page">
   <header>
-    <div class="brand">MAD Platform — Accessibility Report</div>
-    <h1>{title_url}</h1>
-    <div class="meta">Generated {generated_at}</div>
+    <div>
+      <div class="brand">MAD Platform — Accessibility Report</div>
+      <h1>{title_url}</h1>
+      <div class="meta">Generated {generated_at}</div>
+    </div>
+    <div class="score-badge" style="border-color:{score_color};color:{score_color}">
+      <div class="n">{score}</div>
+      <div class="l">Score</div>
+    </div>
   </header>
 
   <div class="summary-box">
@@ -307,6 +346,7 @@ def draft_report(
     ticket_by_finding = ticket_by_finding or {}
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     exec_summary = generate_executive_summary(url, ranked)
+    score = compute_score(ranked)
 
     counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     for r in ranked:
@@ -325,6 +365,8 @@ def draft_report(
         title_url=_esc(url),
         generated_at=_esc(generated_at),
         exec_summary=_esc(exec_summary),
+        score=score,
+        score_color=score_color(score),
         stat_badges=stat_badges,
         count=len(ranked),
         finding_cards=finding_cards,
