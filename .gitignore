@@ -15,6 +15,17 @@ venv/
 # Generated output -- local copies of reports from run_scan.py, not source
 reports/
 
+# Internal planning/notes -- kept locally, never pushed to the public repo
+# (only code and setup instructions belong on GitHub). If a file needs to
+# move back to GitHub later, un-ignore it explicitly rather than removing
+# this whole block.
+REQUIREMENTS.md
+PLAN.md
+WORKFLOW_BASELINE.md
+PRODUCT_OVERVIEW.md
+SUBMISSION_TEXT.md
+MASTER_CONTEXT.md
+
 # OS
 .DS_Store
 

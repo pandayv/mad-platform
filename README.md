@@ -184,9 +184,8 @@ docs/            # Demo site (GitHub Pages)
 run_scan.py               # CLI entry point for a one-time scan
 review_escalations.py     # SME review queue CLI
 check_wcag_version.py     # Manual/demo trigger for the WCAG freshness check
-REQUIREMENTS.md           # The buildable specification
-PLAN.md                   # Execution plan and build log
-PRODUCT_OVERVIEW.md       # Plain-language feature summary
+SETUP.md                  # GCP provisioning checklist
+gcp-deploy.sh / gcp-cleanup.sh   # Infrastructure-as-code
 ```
 
 ## Built during the hackathon submission window
