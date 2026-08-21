@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 FLASH_LITE = "gemini-3.5-flash-lite"
 FLASH = "gemini-3.7-flash"
+EMBEDDING_MODEL = "gemini-embedding-001"
 
 _PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "project-d7e6174e-cca7-4d16-9d5")
 _client = genai.Client(vertexai=True, project=_PROJECT, location="global")
@@ -51,3 +52,8 @@ def generate_structured(
         ),
     )
     return schema.model_validate_json(response.text)
+
+
+def embed(text: str) -> list[float]:
+    result = _client.models.embed_content(model=EMBEDDING_MODEL, contents=text)
+    return list(result.embeddings[0].values)

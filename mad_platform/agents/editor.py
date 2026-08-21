@@ -6,9 +6,13 @@ survives. Uses gemini-3.7-flash (the judgment-tier model, section 6.3) --
 this is exactly the kind of low-volume, high-consequence call that tier
 is reserved for.
 
-Not yet grounded against retrieved WCAG text (that's Step 3's RAG
-addition, REQUIREMENTS.md section 9) -- Editor verifies against the page
-evidence (HTML, screenshot) only for now. Flagged, not hidden.
+Step 3 addition: grounded against retrieved WCAG text (REQUIREMENTS.md
+section 9), not just the model's own parametric knowledge. Retrieval
+provides CANDIDATES, not a forced answer -- semantic similarity isn't
+guaranteed to surface the single best match (confirmed during testing:
+"aria-hidden on a focusable button" retrieved focus-themed criteria over
+the actually-correct 4.1.2 Name/Role/Value), so Editor reasons over what's
+retrieved rather than blindly adopting it.
 
 The written rationale on every dismissal is required even though nothing
 consumes it yet -- REQUIREMENTS.md section 5.8 loop 2: it's the seed of a
@@ -23,6 +27,7 @@ from pydantic import BaseModel
 from mad_platform.agents.analyst import RawFinding
 from mad_platform.tools.crawler import PageSnapshot
 from mad_platform.tools.gemini_client import FLASH, generate_structured
+from mad_platform.tools.rag import retrieve as rag_retrieve
 
 
 class VerifiedFinding(BaseModel):
@@ -58,7 +63,13 @@ value appears to be a hover state not visible by default").
 If you confirm a finding, also give your own confidence rating (0.0-1.0)
 reflecting how certain you are this is a real, actionable violation.
 
-Findings to verify (index: source, check, WCAG citation, description, selector, Analyst's own confidence):
+For each finding, retrieved WCAG reference candidates are provided below
+it -- these are the CLOSEST semantic matches found, not a guaranteed
+correct answer. Use them to ground your citation when they genuinely fit;
+if none of the candidates match the actual issue, use your own knowledge
+instead rather than forcing a bad fit.
+
+Findings to verify (index: source, check, Analyst's WCAG guess, description, selector, Analyst's own confidence, retrieved reference candidates):
 {findings_list}
 
 Page title: {title}
@@ -70,9 +81,12 @@ HTML excerpt:
 def _format_findings(findings: list[RawFinding]) -> str:
     lines = []
     for i, f in enumerate(findings):
+        candidates = rag_retrieve(f.description, top_k=3)
+        candidates_text = "; ".join(f"{c.number} {c.title} ({c.level})" for c in candidates) or "none found"
         lines.append(
-            f"{i}: [{f.source}/{f.check}] WCAG {f.wcag_criterion} -- {f.description} "
-            f"(selector: {f.selector}, Analyst confidence: {f.analyst_confidence:.2f})"
+            f"{i}: [{f.source}/{f.check}] Analyst guessed WCAG {f.wcag_criterion} -- {f.description} "
+            f"(selector: {f.selector}, Analyst confidence: {f.analyst_confidence:.2f})\n"
+            f"    retrieved candidates: {candidates_text}"
         )
     return "\n".join(lines)
 
