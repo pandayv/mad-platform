@@ -14,16 +14,20 @@ than persisting large intermediate finding blobs just to save one re-crawl.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
 
+from mad_platform.agents.action_agent import route_and_file
 from mad_platform.agents.analyst import RawFinding, analyze_page
 from mad_platform.agents.editor import VerifiedFinding, verify_findings
+from mad_platform.agents.reporter import RankedFinding, draft_report, rank_and_recommend
 from mad_platform.state import firestore_client as fs
 from mad_platform.tools.crawler import PageSnapshot, fetch_page
 from mad_platform.tools.gemini_client import FLASH, FLASH_LITE, generate_structured
+from mad_platform.tools.issue_sink import IssueSink, MockIssueSink
 
 MAX_ADDITIONAL_PAGES = 2
 
@@ -160,12 +164,37 @@ async def _process_page(job_id: str, url: str) -> list[VerifiedFinding]:
     return verified
 
 
-async def run_one_time_scan(url: str, job_id: str | None = None) -> dict[str, list[VerifiedFinding]]:
-    """Step 1, end to end: site -> verified findings, one URL in.
-
-    Pass an existing job_id to resume it -- pages already fully verified
-    are skipped, everything else is (re)run from its crawl.
+def _findings_from_stored(stored: list[dict]) -> list[VerifiedFinding]:
+    """Firestore stores verified findings as plain dicts (plus a "raw"
+    field checkpoint_page_verified adds) -- converts back to VerifiedFinding
+    so resumed results are the same type as freshly-produced ones. This was
+    a real, previously-undetected gap: nothing downstream consumed a
+    resumed job's results type-strictly until Reporter/Action Agent were
+    wired in below, so the mismatch never surfaced in testing before now.
     """
+    return [VerifiedFinding(**{k: v for k, v in d.items() if k != "raw"}) for d in stored]
+
+
+@dataclass
+class ScanResult:
+    job_id: str
+    findings_by_page: dict[str, list[VerifiedFinding]]
+    report: str
+    filed: list[tuple[int, RankedFinding, str]]
+    escalated: list[tuple[int, RankedFinding, str]]
+    already_filed: list[tuple[int, RankedFinding, str]]
+
+
+async def run_one_time_scan(
+    url: str, job_id: str | None = None, issue_sink: IssueSink | None = None
+) -> ScanResult:
+    """The full core, end to end: site -> findings -> recommendations ->
+    report -> escalation. Pass an existing job_id to resume it -- pages
+    already fully verified are skipped, everything else is (re)run from
+    its crawl. issue_sink defaults to a mock (real Jira credentials are a
+    separate setup step, SETUP.md item 18, not a code dependency).
+    """
+    issue_sink = issue_sink or MockIssueSink()
     existing_job = fs.get_job(job_id) if job_id else None
 
     if existing_job and existing_job.get("pages"):
@@ -186,13 +215,38 @@ async def run_one_time_scan(url: str, job_id: str | None = None) -> dict[str, li
         for page_url in pages:
             if fs.get_page_stage(job_id, page_url) == "verified":
                 job = fs.get_job(job_id)
-                results[page_url] = job["pages"][page_url]["findings"]
+                results[page_url] = _findings_from_stored(job["pages"][page_url]["findings"])
                 continue
             verified = await _process_page(job_id, page_url)
             results[page_url] = verified
+
+        confirmed_by_page = {
+            page_url: [f for f in findings if f.confirmed] for page_url, findings in results.items()
+        }
+        ranked = rank_and_recommend(confirmed_by_page)
+        filing = route_and_file(issue_sink, ranked)
+
+        # Build finding index -> ticket (or None if pending SME review),
+        # so the report reflects what actually happened rather than a
+        # stale "not filed yet" placeholder.
+        ticket_by_finding: dict[int, str | None] = {}
+        for index, _finding, ticket_id in filing["filed"] + filing["already_filed"]:
+            ticket_by_finding[index] = ticket_id
+        for index, _finding, _escalation_id in filing["escalated"]:
+            ticket_by_finding[index] = None
+
+        report = draft_report(url, ranked, ticket_by_finding)
+
         fs.complete_job(job_id)
     except Exception as exc:  # noqa: BLE001
         fs.fail_job(job_id, str(exc))
         raise
 
-    return results
+    return ScanResult(
+        job_id=job_id,
+        findings_by_page=results,
+        report=report,
+        filed=filing["filed"],
+        escalated=filing["escalated"],
+        already_filed=filing["already_filed"],
+    )

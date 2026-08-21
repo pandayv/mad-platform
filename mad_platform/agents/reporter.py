@@ -152,11 +152,14 @@ def _generate_executive_summary(url: str, ranked: list[RankedFinding]) -> str:
     return result.summary
 
 
-def draft_report(url: str, ranked: list[RankedFinding]) -> str:
+def draft_report(url: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None] | None = None) -> str:
     """The fixed report template -- same structure every run, only the
-    data changes. Jira ticket ID is a placeholder until Action Agent
-    (Step 4) exists.
+    data changes. ticket_by_finding maps each finding's position in
+    `ranked` to its filed ticket ID, or None if it's pending SME review --
+    pass it once Action Agent has actually run, so the report reflects the
+    real outcome rather than a stale placeholder.
     """
+    ticket_by_finding = ticket_by_finding or {}
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     exec_summary = _generate_executive_summary(url, ranked)
 
@@ -175,16 +178,21 @@ def draft_report(url: str, ranked: list[RankedFinding]) -> str:
     if not ranked:
         lines.append("\nNo confirmed findings.")
     else:
-        for i, r in enumerate(ranked, 1):
+        for i, r in enumerate(ranked):
+            ticket = ticket_by_finding.get(i)
+            ticket_line = (
+                f"- **Jira ticket:** {ticket}" if ticket
+                else "- **Jira ticket:** _pending SME review before filing (REQUIREMENTS.md section 5.6)_"
+            )
             lines += [
                 "",
-                f"### {i}. [{r.severity.upper()}] WCAG {r.wcag_criterion}",
+                f"### {i + 1}. [{r.severity.upper()}] WCAG {r.wcag_criterion}",
                 f"- **Page:** {r.page_url}",
                 f"- **Risk score:** {r.risk_score:.0f}/100",
                 f"- **Why it matters:** {r.risk_rationale}",
                 f"- **Evidence:** {r.editor_rationale}",
                 f"- **Suggested fix:** {r.suggested_fix}",
-                "- **Jira ticket:** _pending — Action Agent not built yet (Step 4)_",
+                ticket_line,
             ]
 
     return "\n".join(lines)

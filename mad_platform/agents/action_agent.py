@@ -53,16 +53,20 @@ def _ticket_description(finding: RankedFinding) -> str:
 
 def route_and_file(sink: IssueSink, ranked: list[RankedFinding]) -> dict[str, list]:
     """The single escalation gate + idempotent filing for the autonomous
-    majority. Returns {"filed": [(finding, ticket_id)], "escalated":
-    [(finding, escalation_id)], "already_filed": [(finding, ticket_id)]}.
+    majority. Returns {"filed": [(index, finding, ticket_id)], "escalated":
+    [(index, finding, escalation_id)], "already_filed": [(index, finding, ticket_id)]}
+    -- index is the finding's position in `ranked`, included explicitly
+    rather than left for callers to re-derive via value lookup (fragile if
+    two findings ever have identical field values, e.g. near-duplicate
+    findings from the same page).
     """
     result: dict[str, list] = {"filed": [], "escalated": [], "already_filed": []}
 
-    for finding in ranked:
+    for index, finding in enumerate(ranked):
         key = idempotency_key(finding.page_url, finding)
         existing_ticket = fs.get_ticket_for_finding(key)
         if existing_ticket:
-            result["already_filed"].append((finding, existing_ticket))
+            result["already_filed"].append((index, finding, existing_ticket))
             continue
 
         if needs_escalation(finding):
@@ -79,12 +83,12 @@ def route_and_file(sink: IssueSink, ranked: list[RankedFinding]) -> dict[str, li
                     "suggested_fix": finding.suggested_fix,
                 },
             )
-            result["escalated"].append((finding, key))
+            result["escalated"].append((index, finding, key))
             continue
 
         ticket_id = sink.create_issue(_ticket_title(finding), _ticket_description(finding))
         fs.record_ticket_for_finding(key, ticket_id)
-        result["filed"].append((finding, ticket_id))
+        result["filed"].append((index, finding, ticket_id))
 
     return result
 
