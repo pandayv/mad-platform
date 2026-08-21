@@ -53,9 +53,21 @@ Return the paths you selected (not full URLs) and a short reasoning.
 """
 
 
+def _normalize_path(path: str) -> str:
+    """Empty path (a bare "https://example.com" entry URL) and "/" are the
+    same page -- treat them identically everywhere paths get compared.
+    Caught for real: without this, a nav link back to "/" on the entry
+    page got treated as a distinct candidate from the entry URL itself,
+    causing the same page to be crawled and analyzed twice under two URL
+    forms, duplicating every finding on it in the final report.
+    """
+    return path or "/"
+
+
 def _extract_candidate_links(snapshot: PageSnapshot, max_candidates: int = 30) -> dict[str, str]:
     soup = BeautifulSoup(snapshot.html, "html.parser")
     base = urlparse(snapshot.url)
+    entry_path = _normalize_path(base.path)
     candidates: dict[str, str] = {}
     for a in soup.find_all("a", href=True):
         href = a["href"]
@@ -65,8 +77,11 @@ def _extract_candidate_links(snapshot: PageSnapshot, max_candidates: int = 30) -
             continue  # same-domain only
         if parsed.scheme not in ("http", "https"):
             continue
+        path = _normalize_path(parsed.path)
+        if path == entry_path:
+            continue  # just a link back to the entry page itself, not a new candidate
         text = a.get_text(strip=True)[:60]
-        candidates.setdefault(parsed.path or "/", text)
+        candidates.setdefault(path, text)
         if len(candidates) >= max_candidates:
             break
     return candidates
@@ -88,9 +103,11 @@ def select_pages(entry_snapshot: PageSnapshot) -> list[str]:
 
     base = urlparse(entry_snapshot.url)
     selected_urls = [entry_snapshot.url]
+    seen_paths = {_normalize_path(base.path)}
     for path in selection.selected_paths[:MAX_ADDITIONAL_PAGES]:
-        if path in candidates:
+        if path in candidates and path not in seen_paths:
             selected_urls.append(f"{base.scheme}://{base.netloc}{path}")
+            seen_paths.add(path)
     return selected_urls
 
 
