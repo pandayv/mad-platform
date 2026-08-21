@@ -69,8 +69,17 @@ def checkpoint_page_analyzed(job_id: str, page_url: str, raw_finding_count: int)
     _set_page_field(job_id, page_url, {"stage": "analyzed", "raw_finding_count": raw_finding_count})
 
 
-def checkpoint_page_verified(job_id: str, page_url: str, verified_findings: list[dict]) -> None:
-    _set_page_field(job_id, page_url, {"stage": "verified", "findings": verified_findings})
+def checkpoint_page_retry(job_id: str, page_url: str, reason: str) -> None:
+    """Records that the bounded retry gate (REQUIREMENTS.md section 5.4
+    step 4) sent this page back for one more pass, and why. No "stage"
+    field here on purpose -- this doesn't move the page forward, it just
+    makes the decision auditable.
+    """
+    _set_page_field(job_id, page_url, {"retried": True, "retry_reason": reason})
+
+
+def checkpoint_page_verified(job_id: str, page_url: str, verified_findings: list[dict], retried: bool = False) -> None:
+    _set_page_field(job_id, page_url, {"stage": "verified", "findings": verified_findings, "retried": retried})
 
 
 def complete_job(job_id: str) -> None:

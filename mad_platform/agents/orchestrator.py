@@ -23,7 +23,7 @@ from mad_platform.agents.analyst import RawFinding, analyze_page
 from mad_platform.agents.editor import VerifiedFinding, verify_findings
 from mad_platform.state import firestore_client as fs
 from mad_platform.tools.crawler import PageSnapshot, fetch_page
-from mad_platform.tools.gemini_client import FLASH_LITE, generate_structured
+from mad_platform.tools.gemini_client import FLASH, FLASH_LITE, generate_structured
 
 MAX_ADDITIONAL_PAGES = 2
 
@@ -90,20 +90,72 @@ def select_pages(entry_snapshot: PageSnapshot) -> list[str]:
     return selected_urls
 
 
-async def _process_page(job_id: str, url: str) -> list[VerifiedFinding]:
-    snapshot = await fetch_page(url)
-    fs.checkpoint_page_crawled(job_id, url)
+class _RetryDecision(BaseModel):
+    proceed: bool  # True = good enough, move on. False = use the one retry allowance.
+    reasoning: str
 
-    raw_findings: list[RawFinding] = await analyze_page(snapshot)
+
+_RETRY_GATE_PROMPT = """You are the Orchestrator overseeing an accessibility
+scan. Editor has just verified Analyst's findings for a page. Decide: is
+this analysis good enough to proceed, or does the page warrant one more,
+deeper look from Analyst?
+
+Send it back for another pass only if there's a real reason to -- e.g.
+confidence on confirmed findings is low across the board, or several
+dismissals reflect genuine uncertainty rather than a confident correction,
+suggesting the first pass didn't have enough to go on. Do NOT send it back
+just because the page had few or zero findings -- a clean, well-built page
+is a valid, complete result, not evidence of an insufficient pass.
+
+This decision is capped at one retry maximum regardless of your answer --
+you are deciding whether to use that single allowance, not opening a loop.
+
+Editor's verification results for this page:
+{summary}
+"""
+
+
+def _format_verification_summary(verified: list[VerifiedFinding]) -> str:
+    if not verified:
+        return "(no findings at all -- Analyst flagged nothing on this page)"
+    lines = []
+    for v in verified:
+        status = "CONFIRMED" if v.confirmed else "DISMISSED"
+        lines.append(f"- [{status}] WCAG {v.wcag_criterion}, confidence {v.confidence:.2f}: {v.rationale}")
+    return "\n".join(lines)
+
+
+def evaluate_retry_gate(verified: list[VerifiedFinding]) -> _RetryDecision:
+    prompt = _RETRY_GATE_PROMPT.format(summary=_format_verification_summary(verified))
+    return generate_structured(FLASH, prompt, _RetryDecision)
+
+
+async def _run_analysis_pass(url: str) -> tuple[PageSnapshot, list[RawFinding], list[VerifiedFinding]]:
+    snapshot = await fetch_page(url)
+    raw_findings = await analyze_page(snapshot)
+    verified = verify_findings(snapshot, raw_findings)
+    return snapshot, raw_findings, verified
+
+
+async def _process_page(job_id: str, url: str) -> list[VerifiedFinding]:
+    snapshot, raw_findings, verified = await _run_analysis_pass(url)
+    fs.checkpoint_page_crawled(job_id, url)
     fs.checkpoint_page_analyzed(job_id, url, raw_finding_count=len(raw_findings))
 
-    verified = verify_findings(snapshot, raw_findings)
+    decision = evaluate_retry_gate(verified)
+    retried = False
+    if not decision.proceed:
+        fs.checkpoint_page_retry(job_id, url, reason=decision.reasoning)
+        snapshot, raw_findings, verified = await _run_analysis_pass(url)  # one more pass, capped -- no loop
+        retried = True
+
     fs.checkpoint_page_verified(
         job_id,
         url,
         verified_findings=[
             {**v.model_dump(), "raw": raw_findings[v.finding_index].__dict__} for v in verified
         ],
+        retried=retried,
     )
     return verified
 
