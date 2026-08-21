@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import html
 import logging
+import os
 
 from fastapi import FastAPI, Form, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -33,6 +34,15 @@ from mad_platform.state import storage_client
 logger = logging.getLogger("mad_platform.web")
 
 app = FastAPI(title="MAD Platform")
+
+# scan-onboarding is deployed with --allow-unauthenticated (per gcp-deploy.sh
+# -- a business owner has to be able to just hit the URL). That means the
+# app itself is the only thing standing between this endpoint and someone
+# using it as a free Gemini-calling, Playwright-fetching open relay --
+# exactly the risk REQUIREMENTS.md section 6.2 names. If MAD_ACCESS_CODE is
+# set (Cloud Run deploys it from Secret Manager), a scan requires it; if
+# unset (local dev), the gate is open.
+_ACCESS_CODE = os.environ.get("MAD_ACCESS_CODE")
 
 _BASE_STYLE = """
 :root {
@@ -65,7 +75,14 @@ button:hover, .btn:hover { opacity: 0.92; }
 """
 
 
-_FORM_PAGE = f"""<!DOCTYPE html>
+def _render_form(error: str | None = None) -> str:
+    code_field = (
+        '<input type="password" name="code" placeholder="Access code" required style="margin-top:10px" autocomplete="off">'
+        if _ACCESS_CODE
+        else ""
+    )
+    error_html = f'<div class="error-box">{html.escape(error)}</div>' if error else ""
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -81,8 +98,10 @@ _FORM_PAGE = f"""<!DOCTYPE html>
   <div class="card">
     <form action="/scan" method="post">
       <input type="url" name="url" placeholder="https://example.com" required autofocus>
-      <button type="submit">Scan now</button>
+      {code_field}
+      <div style="margin-top:14px"><button type="submit">Scan now</button></div>
     </form>
+    {error_html}
   </div>
 </div>
 </body>
@@ -240,11 +259,13 @@ async def _run_and_store(job_id: str, url: str) -> None:
 
 @app.get("/", response_class=HTMLResponse)
 async def form_page() -> str:
-    return _FORM_PAGE
+    return _render_form()
 
 
 @app.post("/scan")
-async def start_scan(url: str = Form(...)) -> RedirectResponse:
+async def start_scan(url: str = Form(...), code: str = Form("")) -> Response:
+    if _ACCESS_CODE and code != _ACCESS_CODE:
+        return HTMLResponse(_render_form(error="Wrong access code."), status_code=403)
     job_id = fs.create_job(url)
     asyncio.create_task(_run_and_store(job_id, url))
     return RedirectResponse(f"/status/{job_id}", status_code=303)

@@ -142,6 +142,44 @@ gcloud secrets add-iam-policy-binding jira-email-secrets \
 gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
   --member="serviceAccount:${SA_ORCH}" --role="roles/storage.objectAdmin"
 
+# ── 8b. Platform UI widening (added 2026-08-21) — a DELIBERATE, DISCLOSED
+#    deviation from the isolation above. mad_platform/web/app.py runs the
+#    *entire* pipeline (not just publish-and-hand-off) directly inside
+#    scan-onboarding, as REQUIREMENTS.md §9's "simulate onboarding with a
+#    manual trigger" allowance — so scan-onboarding-sa needs everything
+#    scan-orchestrator-sa has, not just Firestore+publish. Revisit before
+#    final submission: the production shape should keep onboarding
+#    publish-only and let scan-orchestrator do the actual work via Pub/Sub,
+#    same as the rest of this script assumes.
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SA_ONBOARDING}" --role="roles/aiplatform.user"
+gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
+  --member="serviceAccount:${SA_ONBOARDING}" --role="roles/storage.objectAdmin"
+
+# mad-ui-access-code — the ONLY thing standing between scan-onboarding's
+# --allow-unauthenticated endpoint and someone using it as a free
+# Gemini-calling, Playwright-fetching open relay (REQUIREMENTS.md §6.2).
+# Create the secret's first version manually before running this (its
+# value must never be committed):
+#   openssl rand -hex 12 | gcloud secrets create mad-ui-access-code --data-file=-
+gcloud secrets add-iam-policy-binding mad-ui-access-code \
+  --member="serviceAccount:${SA_ONBOARDING}" --role="roles/secretmanager.secretAccessor"
+
+# Cloud Build needs its own permissions to build/push the Platform UI image
+# and deploy it — separate from the app's own service accounts above.
+# Discovered by hitting each gap directly during the first real deploy.
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${COMPUTE_SA}" --role="roles/logging.logWriter"
+gcloud artifacts repositories create mad-platform \
+  --repository-format=docker --location="$REGION" \
+  --description="MAD Platform service images" \
+  || echo "skipped (already exists): mad-platform repo"
+gcloud artifacts repositories add-iam-policy-binding mad-platform \
+  --location="$REGION" \
+  --member="serviceAccount:${COMPUTE_SA}" --role="roles/artifactregistry.writer"
+
 # ── 9. Invocation IAM — dedicated identities invoke, NOT the target's own
 #    service account. This is the fix for the circular pattern in the
 #    Terraform (Orchestrator authenticating a push subscription as itself).
@@ -186,6 +224,16 @@ gcloud scheduler jobs create http scan-wcag-poller-tick \
   && echo "created scheduler job: scan-wcag-poller-tick" \
   || echo "skipped (already exists): scan-wcag-poller-tick"
 
-echo "Scaffolding complete. All four services are running placeholder images —"
-echo "redeploy each with 'gcloud run deploy SERVICE --source .' once the ADK"
-echo "agent code exists, from inside that service's own directory."
+echo "Scaffolding complete. scan-onboarding is running the real Platform UI"
+echo "image (deployed 2026-08-21, see below) — the other three services are"
+echo "still on the placeholder image, redeploy each once their code exists:"
+echo '  gcloud builds submit --tag=us-central1-docker.pkg.dev/'"$PROJECT_ID"'/mad-platform/SERVICE:latest .'
+echo '  gcloud run deploy SERVICE --image=us-central1-docker.pkg.dev/'"$PROJECT_ID"'/mad-platform/SERVICE:latest --region='"$REGION"
+echo ""
+echo "scan-onboarding's actual deploy command (mad_platform/web/app.py, from repo root):"
+echo '  gcloud builds submit --tag=us-central1-docker.pkg.dev/'"$PROJECT_ID"'/mad-platform/scan-onboarding:latest --region='"$REGION"' .'
+echo '  gcloud run deploy scan-onboarding \'
+echo '    --image=us-central1-docker.pkg.dev/'"$PROJECT_ID"'/mad-platform/scan-onboarding:latest \'
+echo '    --region='"$REGION"' --service-account='"$SA_ONBOARDING"' \'
+echo '    --no-cpu-throttling --memory=1Gi --concurrency=4 --max-instances=3 --min-instances=0 \'
+echo '    --set-secrets=MAD_ACCESS_CODE=mad-ui-access-code:latest --allow-unauthenticated'
