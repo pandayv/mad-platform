@@ -84,6 +84,18 @@ def checkpoint_page_verified(job_id: str, page_url: str, verified_findings: list
     _set_page_field(job_id, page_url, {"stage": "verified", "findings": verified_findings, "retried": retried})
 
 
+def set_job_phase(job_id: str, phase: str) -> None:
+    """A coarser signal than the per-page stage checkpoints, for the gaps
+    between them where nothing else gets written -- page selection (after
+    the entry crawl, before any page-level checkpoint exists) and the
+    ranking/filing/report tail (after every page hits "verified" but before
+    complete_job). Without this, a status page watching only per-page
+    stages goes silent during both, and a healthy multi-second wait reads
+    identically to a hang.
+    """
+    _JOBS.document(job_id).update({"phase": phase, "updated_at": datetime.now(timezone.utc)})
+
+
 def complete_job(job_id: str) -> None:
     _JOBS.document(job_id).update({"status": "completed", "updated_at": datetime.now(timezone.utc)})
 

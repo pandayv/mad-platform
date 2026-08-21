@@ -144,6 +144,11 @@ _STATUS_PAGE = """<!DOCTYPE html>
   <div class="brand"><a href="/" style="color:inherit;text-decoration:none">MAD Platform</a></div>
   <h1 id="heading">Scanning __URL__</h1>
   <div class="tagline" id="tagline">This runs the real pipeline: page selection, parallel analysis, independent verification, ranking, ticket filing.</div>
+  <div class="error-box" id="slow-warning" style="display:none;margin-bottom:16px">
+    This is taking longer than usual (3+ minutes). Most scans finish in under 90s -- the
+    site may be unusually heavy, or something may need attention. Feel free to keep
+    waiting, or come back and check this page later.
+  </div>
   <div class="card" id="content">
     <span class="spinner"></span> Starting...
   </div>
@@ -151,6 +156,40 @@ _STATUS_PAGE = """<!DOCTYPE html>
 <script>
 const jobId = __JOB_ID__;
 const severityColor = {critical: "#B91C1C", high: "#C2410C", medium: "#A16207", low: "#1D4ED8"};
+
+// Human-readable label per orchestrator phase (mad_platform/agents/
+// orchestrator.py's fs.set_job_phase calls) -- without this, the gaps
+// between per-page checkpoints (page selection, then ranking/filing/
+// report generation at the end) show nothing at all, and a healthy
+// multi-second wait looks identical to a hang.
+const PHASE_LABELS = {
+  crawling_entry_page: "Loading the site...",
+  selecting_pages: "Deciding which pages matter most...",
+  analyzing_pages: "Analyzing pages for accessibility issues...",
+  ranking_findings: "Ranking findings by real-world risk...",
+  filing_tickets: "Filing tickets for confirmed findings...",
+  generating_report: "Generating your report...",
+};
+
+let startTimeMs = null;
+let finished = false;
+
+function elapsedText() {
+  if (!startTimeMs) return "";
+  const secs = Math.max(0, Math.floor((Date.now() - startTimeMs) / 1000));
+  return secs < 60 ? `${secs}s elapsed` : `${Math.floor(secs / 60)}m ${secs % 60}s elapsed`;
+}
+
+function tickElapsed() {
+  if (finished) return;
+  const el = document.getElementById("elapsed");
+  if (el) el.textContent = elapsedText();
+  const warn = document.getElementById("slow-warning");
+  if (warn && startTimeMs && (Date.now() - startTimeMs) / 1000 > 180) {
+    warn.style.display = "block";
+  }
+}
+setInterval(tickElapsed, 1000);
 
 // The scanned URL, page URLs, and any error message all trace back to
 // user-supplied input (the form's url field) -- escape before innerHTML.
@@ -167,17 +206,22 @@ function stageDot(stage) {
 }
 
 function renderInProgress(data) {
+  if (!startTimeMs && data.created_at) startTimeMs = new Date(data.created_at).getTime();
   document.getElementById("heading").textContent = "Scanning " + data.url;
+  const phaseLabel = PHASE_LABELS[data.phase] || "Starting...";
   let rows = Object.entries(data.pages).map(([url, info]) => {
     const stage = info.stage || "pending";
     return `<li><span>${stageDot(info.stage)}${esc(url)}</span><span style="color:var(--text-muted)">${esc(stage)}</span></li>`;
   }).join("");
-  if (!rows) rows = "<li><span class=\\"spinner\\"></span> Selecting pages to scan...</li>";
   document.getElementById("content").innerHTML =
-    '<span class="spinner"></span> Scan in progress<ul class="stage-list">' + rows + '</ul>';
+    `<div style="display:flex;justify-content:space-between;align-items:center">` +
+    `<span><span class="spinner"></span> ${esc(phaseLabel)}</span>` +
+    `<span id="elapsed" style="color:var(--text-muted);font-size:13px">${elapsedText()}</span></div>` +
+    (rows ? `<ul class="stage-list">${rows}</ul>` : "");
 }
 
 function renderCompleted(data) {
+  finished = true;
   const s = data.summary;
   document.getElementById("heading").textContent = "Scan complete";
   document.getElementById("tagline").textContent = data.url;
@@ -208,6 +252,7 @@ function renderCompleted(data) {
 }
 
 function renderFailed(data) {
+  finished = true;
   document.getElementById("heading").textContent = "Scan failed";
   document.getElementById("content").innerHTML =
     `<div class="error-box">${esc(data.error || "Unknown error")}</div>
@@ -286,14 +331,17 @@ async def api_status(job_id: str) -> JSONResponse:
     job = fs.get_job(job_id)
     if job is None:
         raise HTTPException(404, "No such job")
+    created_at = job.get("created_at")
     return JSONResponse(
         {
             "job_id": job_id,
             "url": job["url"],
             "status": job.get("status", "in_progress"),
+            "phase": job.get("phase"),
             "error": job.get("error"),
             "pages": {url: {"stage": info.get("stage")} for url, info in job.get("pages", {}).items()},
             "summary": job.get("summary"),
+            "created_at": created_at.isoformat() if created_at else None,
         }
     )
 

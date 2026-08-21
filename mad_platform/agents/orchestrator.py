@@ -227,10 +227,13 @@ async def run_one_time_scan(
         else:
             if job_id is None:
                 job_id = fs.create_job(url)
+            fs.set_job_phase(job_id, "crawling_entry_page")
             entry_snapshot = await fetch_page(url)
             fs.checkpoint_page_crawled(job_id, url)
+            fs.set_job_phase(job_id, "selecting_pages")
             pages = select_pages(entry_snapshot)
 
+        fs.set_job_phase(job_id, "analyzing_pages")
         results: dict[str, list[VerifiedFinding]] = {}
         for page_url in pages:
             if fs.get_page_stage(job_id, page_url) == "verified":
@@ -240,10 +243,13 @@ async def run_one_time_scan(
             verified = await _process_page(job_id, page_url)
             results[page_url] = verified
 
+        fs.set_job_phase(job_id, "ranking_findings")
         confirmed_by_page = {
             page_url: [f for f in findings if f.confirmed] for page_url, findings in results.items()
         }
         ranked = rank_and_recommend(confirmed_by_page)
+
+        fs.set_job_phase(job_id, "filing_tickets")
         filing = route_and_file(issue_sink, ranked)
 
         # Build finding index -> ticket (or None if pending SME review),
@@ -255,6 +261,7 @@ async def run_one_time_scan(
         for index, _finding, _escalation_id in filing["escalated"]:
             ticket_by_finding[index] = None
 
+        fs.set_job_phase(job_id, "generating_report")
         report = draft_report(url, ranked, ticket_by_finding)
         report_uri = storage_client.save_report(job_id, report)
         fs.complete_job(job_id)
