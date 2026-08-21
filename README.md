@@ -19,6 +19,9 @@ on Gemini, Google's Agent Development Kit (ADK), and Google Cloud.
   — a small fictional business site with deliberate accessibility
   violations, built as a consistent, reproducible scan target (see
   [`docs/`](docs/)).
+- **Architecture diagram:** [MAD Platform Architecture](https://claude.ai/code/artifact/a248d861-2f0d-4176-801e-af7c748a9309)
+  — the Review Cycle pipeline, the WCAG auto-heal loop, and the Google
+  Cloud infrastructure behind it.
 
 ## The problem
 
