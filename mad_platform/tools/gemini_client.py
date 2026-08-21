@@ -28,7 +28,15 @@ EMBEDDING_MODEL = "gemini-embedding-001"
 # error -- the background task just sat there forever, invisible to the
 # job's status (Firestore never got another checkpoint, and nothing raised
 # for fs.fail_job to catch). The SDK's own default is no timeout at all.
-_TIMEOUT_MS = 30_000
+#
+# 30s was the first value tried; caught for real a second time against the
+# demo site (22 findings across 3 pages): Reporter's ranking call processes
+# every confirmed finding in one prompt and returns a bigger structured
+# response than a small call like select_pages, and legitimately needs more
+# than 30s once there are more than a handful of findings. Raised to 60s --
+# still bounded (worst case ~2min with the one retry below), just sized for
+# the biggest real call this pipeline makes rather than the smallest.
+_TIMEOUT_MS = 60_000
 _MAX_ATTEMPTS = 2
 
 _PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "project-d7e6174e-cca7-4d16-9d5")
