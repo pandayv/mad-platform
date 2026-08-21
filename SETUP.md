@@ -86,11 +86,13 @@ what else looks appealing.
         client must use `global`, not `us-central1`**, despite Cloud Run
         itself being deployed in `us-central1` — these are independent
         settings, don't assume they need to match.
-- [ ] 15. Docker Desktop: https://www.docker.com/products/docker-desktop/
-- [ ] 16. Playwright Python: https://playwright.dev/python/docs/intro —
-      `pip install playwright && playwright install chromium`
-- [ ] 17. Create the public GitHub repo for MAD Platform now (commit history
-      from today is part of the "newly created" evidence): https://github.com/new
+- [x] 15. Docker Desktop — **not needed in practice**: no local Docker
+      install exists in this environment; `gcloud builds submit`/
+      `gcloud run deploy --source` build remotely via Cloud Build instead.
+- [x] 16. Playwright Python — `pip install playwright && playwright
+      install --with-deps chromium` (the `--with-deps` form matters inside
+      Docker, see `Dockerfile`)
+- [x] 17. Public GitHub repo created: `github.com/pandayv/mad-platform`
 
 ## Third-party accounts
 
@@ -99,10 +101,9 @@ what else looks appealing.
       — note the project key (open item in REQUIREMENTS.md §11)
 - [ ] 19. Email sending — SendGrid free tier: https://sendgrid.com, or a
       dedicated Gmail account + app password for SMTP
-- [ ] 20. Demo target site hosting — GitHub Pages: https://pages.github.com/
-      or Netlify: https://www.netlify.com/ (build a small site with a few
-      deliberate WCAG violations; this repo also doubles as the GitHub
-      deploy-detection test target)
+- [x] 20. Demo target site — `docs/` folder, hosted via GitHub Pages at
+      `pandayv.github.io/mad-platform`, deliberate WCAG violations mapped
+      to what `rule_checks.py` actually detects (not guessed)
 
 ## Optional
 
