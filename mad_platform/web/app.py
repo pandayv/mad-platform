@@ -151,7 +151,7 @@ function renderInProgress(data) {
   document.getElementById("heading").textContent = "Scanning " + data.url;
   let rows = Object.entries(data.pages).map(([url, info]) => {
     const stage = info.stage || "pending";
-    return `<li>${stageDot(info.stage)} ${esc(url)}<span style="color:var(--text-muted)">${esc(stage)}</span></li>`;
+    return `<li><span>${stageDot(info.stage)}${esc(url)}</span><span style="color:var(--text-muted)">${esc(stage)}</span></li>`;
   }).join("");
   if (!rows) rows = "<li><span class=\\"spinner\\"></span> Selecting pages to scan...</li>";
   document.getElementById("content").innerHTML =
