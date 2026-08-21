@@ -25,6 +25,8 @@ _DATABASE = "scan-firestore"
 
 _client = firestore.Client(project=_PROJECT, database=_DATABASE)
 _JOBS = _client.collection("scan_jobs")
+_TICKETS = _client.collection("filed_tickets")  # idempotency_key -> ticket_id
+_ESCALATIONS = _client.collection("escalations")  # SME queue, per REQUIREMENTS.md section 5.6
 
 # Stages, in order -- used to answer "what's the next incomplete stage".
 PAGE_STAGES = ["crawled", "analyzed", "verified"]
@@ -90,6 +92,62 @@ def fail_job(job_id: str, error: str) -> None:
     _JOBS.document(job_id).update(
         {"status": "failed", "error": error, "updated_at": datetime.now(timezone.utc)}
     )
+
+
+def get_ticket_for_finding(idempotency_key: str) -> str | None:
+    """Checks whether a finding has already been filed -- the idempotency
+    guard from REQUIREMENTS.md section 5.4 step 7 and Guiding Principle 3.
+    """
+    doc = _TICKETS.document(idempotency_key).get()
+    return doc.to_dict()["ticket_id"] if doc.exists else None
+
+
+def record_ticket_for_finding(idempotency_key: str, ticket_id: str) -> None:
+    _TICKETS.document(idempotency_key).set(
+        {"ticket_id": ticket_id, "filed_at": datetime.now(timezone.utc)}
+    )
+
+
+def create_escalation(idempotency_key: str, finding_data: dict) -> str:
+    """Adds a finding to the SME queue -- no ticket is filed for it until
+    resolved, per REQUIREMENTS.md section 5.6: escalated findings wait,
+    they don't act-then-flag like the non-escalated majority.
+    """
+    doc_ref = _ESCALATIONS.document(idempotency_key)
+    doc_ref.set(
+        {
+            **finding_data,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
+    return idempotency_key
+
+
+def list_pending_escalations() -> list[dict[str, Any]]:
+    return [{"id": doc.id, **doc.to_dict()} for doc in _ESCALATIONS.where(
+        filter=firestore.FieldFilter("status", "==", "pending")
+    ).stream()]
+
+
+def resolve_escalation(escalation_id: str, disposition: str, reviewer: str = "sme") -> dict[str, Any]:
+    """disposition: 'confirm' or 'dismiss'. Returns the escalation's data
+    so the caller (Action Agent) can file a ticket if confirmed.
+    """
+    doc_ref = _ESCALATIONS.document(escalation_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise ValueError(f"No escalation found with id {escalation_id!r}")
+    data = doc.to_dict()
+    doc_ref.update(
+        {
+            "status": "resolved",
+            "disposition": disposition,
+            "reviewer": reviewer,
+            "resolved_at": datetime.now(timezone.utc),
+        }
+    )
+    return data
 
 
 def _set_page_field(job_id: str, page_url: str, fields: dict) -> None:
