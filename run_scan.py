@@ -42,7 +42,7 @@ def main() -> None:
         print(f"  {len(confirmed)} confirmed, {len(dismissed)} dismissed by Editor")
 
     print(f"\n{'=' * 78}")
-    print("REPORT")
+    print(f"REPORT (saved to {result.report_uri})")
     print(f"{'=' * 78}")
     print(result.report)
 

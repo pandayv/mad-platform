@@ -25,6 +25,7 @@ from mad_platform.agents.analyst import RawFinding, analyze_page
 from mad_platform.agents.editor import VerifiedFinding, verify_findings
 from mad_platform.agents.reporter import RankedFinding, draft_report, rank_and_recommend
 from mad_platform.state import firestore_client as fs
+from mad_platform.state import storage_client
 from mad_platform.tools.crawler import PageSnapshot, fetch_page
 from mad_platform.tools.gemini_client import FLASH, FLASH_LITE, generate_structured
 from mad_platform.tools.issue_sink import IssueSink, MockIssueSink
@@ -197,6 +198,7 @@ class ScanResult:
     job_id: str
     findings_by_page: dict[str, list[VerifiedFinding]]
     report: str
+    report_uri: str
     filed: list[tuple[int, RankedFinding, str]]
     escalated: list[tuple[int, RankedFinding, str]]
     already_filed: list[tuple[int, RankedFinding, str]]
@@ -253,7 +255,7 @@ async def run_one_time_scan(
             ticket_by_finding[index] = None
 
         report = draft_report(url, ranked, ticket_by_finding)
-
+        report_uri = storage_client.save_report(job_id, report)
         fs.complete_job(job_id)
     except Exception as exc:  # noqa: BLE001
         fs.fail_job(job_id, str(exc))
@@ -263,6 +265,7 @@ async def run_one_time_scan(
         job_id=job_id,
         findings_by_page=results,
         report=report,
+        report_uri=report_uri,
         filed=filing["filed"],
         escalated=filing["escalated"],
         already_filed=filing["already_filed"],
