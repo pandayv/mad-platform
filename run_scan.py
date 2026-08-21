@@ -15,8 +15,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import pathlib
 
 from mad_platform.agents.orchestrator import run_one_time_scan
+
+REPORTS_DIR = pathlib.Path(__file__).parent / "reports"
 
 
 def main() -> None:
@@ -41,9 +44,16 @@ def main() -> None:
         print(f"\n{page_url}")
         print(f"  {len(confirmed)} confirmed, {len(dismissed)} dismissed by Editor")
 
+    REPORTS_DIR.mkdir(exist_ok=True)
+    local_path = REPORTS_DIR / f"{result.job_id}.md"
+    local_path.write_text(result.report)
+
     print(f"\n{'=' * 78}")
-    print(f"REPORT (saved to {result.report_uri})")
+    print("REPORT")
     print(f"{'=' * 78}")
+    print(f"Local file:    {local_path}")
+    print(f"Cloud Storage: {result.report_uri}  (gs:// -- needs gcloud/Console to open, not a browser link)")
+    print()
     print(result.report)
 
     print(f"\n{'=' * 78}")
