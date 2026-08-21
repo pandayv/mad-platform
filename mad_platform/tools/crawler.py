@@ -33,6 +33,53 @@ class PageSnapshot:
     html: str
     screenshot_png: bytes
     title: str
+    text_style_samples: list[dict]
+
+
+# Walks visible, text-bearing elements and records computed color/background
+# — contrast checking needs actual rendered styles, not raw HTML/CSS, since
+# color can come from a stylesheet, inline style, or an inherited ancestor.
+# Resolves the effective background by walking up through parents past any
+# transparent layers, defaulting to white (the common web default) if none
+# is found, since CSS itself has no concept of "the final background".
+_STYLE_SNAPSHOT_JS = """
+() => {
+  function getEffectiveBackground(el) {
+    let node = el;
+    while (node) {
+      const bg = getComputedStyle(node).backgroundColor;
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+        return bg;
+      }
+      node = node.parentElement;
+    }
+    return 'rgb(255, 255, 255)';
+  }
+  const results = [];
+  const elements = document.body.querySelectorAll('*');
+  for (const el of elements) {
+    const directText = Array.from(el.childNodes)
+      .filter(n => n.nodeType === Node.TEXT_NODE)
+      .map(n => n.textContent.trim())
+      .join(' ')
+      .trim();
+    if (!directText) continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) continue;
+    const style = getComputedStyle(el);
+    if (style.visibility === 'hidden' || style.display === 'none') continue;
+    results.push({
+      tag: el.tagName.toLowerCase(),
+      text: directText.slice(0, 80),
+      color: style.color,
+      backgroundColor: getEffectiveBackground(el),
+      fontSizePx: parseFloat(style.fontSize),
+      fontWeight: style.fontWeight,
+    });
+  }
+  return results;
+}
+"""
 
 
 def _assert_safe_target(url: str) -> None:
@@ -83,7 +130,14 @@ async def fetch_page(url: str, timeout_ms: int = 15000, retries: int = 2) -> Pag
                     html = await page.content()
                     title = await page.title()
                     screenshot = await page.screenshot(full_page=True)
-                    return PageSnapshot(url=url, html=html, screenshot_png=screenshot, title=title)
+                    style_samples = await page.evaluate(_STYLE_SNAPSHOT_JS)
+                    return PageSnapshot(
+                        url=url,
+                        html=html,
+                        screenshot_png=screenshot,
+                        title=title,
+                        text_style_samples=style_samples,
+                    )
                 finally:
                     await browser.close()
         except Exception as exc:  # noqa: BLE001 - deliberately broad, we retry any transient failure

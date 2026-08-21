@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Test Fixture — Deliberate Violations</title>
+</head>
+<body>
+  <h1>Main Title</h1>
+  <h3>Skipped heading level (should be h2)</h3>
+
+  <img src="photo.jpg" width="200" height="150">
+  <img src="icon.png" alt="" width="20" height="20">
+
+  <p style="color: #999999; background-color: #aaaaaa; font-size: 14px;">
+    Low contrast body text that should fail the AA threshold.
+  </p>
+
+  <p style="color: #000000; background-color: #ffffff; font-size: 16px;">
+    Normal contrast text that should pass.
+  </p>
+
+  <form>
+    <input type="text" name="email" id="email-field">
+    <label for="name-field">Name</label>
+    <input type="text" id="name-field">
+  </form>
+
+  <a href="#" tabindex="5">Link with bad positive tabindex</a>
+
+  <button aria-hidden="true">Hidden but still focusable button</button>
+
+  <div aria-labelledby="does-not-exist">References a missing id</div>
+</body>
+</html>
