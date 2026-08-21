@@ -1,0 +1,20 @@
+# Environment / secrets — never commit real credentials
+.env
+.env.*
+*.tfvars
+terraform.tfstate*
+.terraform/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
