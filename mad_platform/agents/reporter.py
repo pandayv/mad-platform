@@ -23,6 +23,7 @@ ranking/synthesis is explicitly one of the calls that tier is reserved for.
 
 from __future__ import annotations
 
+import html as html_lib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -139,7 +140,7 @@ Findings, highest risk first (severity, WCAG topic, one-line description):
 """
 
 
-def _generate_executive_summary(url: str, ranked: list[RankedFinding]) -> str:
+def generate_executive_summary(url: str, ranked: list[RankedFinding]) -> str:
     if not ranked:
         return (
             "This scan didn't find any confirmed accessibility violations on the "
@@ -152,17 +153,22 @@ def _generate_executive_summary(url: str, ranked: list[RankedFinding]) -> str:
     return result.summary
 
 
-def draft_report(url: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None] | None = None) -> str:
-    """The fixed report template -- same structure every run, only the
-    data changes. ticket_by_finding maps each finding's position in
-    `ranked` to its filed ticket ID, or None if it's pending SME review --
-    pass it once Action Agent has actually run, so the report reflects the
-    real outcome rather than a stale placeholder.
-    """
-    ticket_by_finding = ticket_by_finding or {}
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    exec_summary = _generate_executive_summary(url, ranked)
+@dataclass
+class ReportBundle:
+    markdown: str
+    html: str
 
+
+def _ticket_line_markdown(ticket: str | None) -> str:
+    return (
+        f"- **Jira ticket:** {ticket}" if ticket
+        else "- **Jira ticket:** _pending SME review before filing (REQUIREMENTS.md section 5.6)_"
+    )
+
+
+def _render_markdown(
+    url: str, generated_at: str, exec_summary: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None]
+) -> str:
     lines = [
         f"# Accessibility Report — {url}",
         f"_Generated {generated_at}_",
@@ -179,11 +185,6 @@ def draft_report(url: str, ranked: list[RankedFinding], ticket_by_finding: dict[
         lines.append("\nNo confirmed findings.")
     else:
         for i, r in enumerate(ranked):
-            ticket = ticket_by_finding.get(i)
-            ticket_line = (
-                f"- **Jira ticket:** {ticket}" if ticket
-                else "- **Jira ticket:** _pending SME review before filing (REQUIREMENTS.md section 5.6)_"
-            )
             lines += [
                 "",
                 f"### {i + 1}. [{r.severity.upper()}] WCAG {r.wcag_criterion}",
@@ -192,7 +193,200 @@ def draft_report(url: str, ranked: list[RankedFinding], ticket_by_finding: dict[
                 f"- **Why it matters:** {r.risk_rationale}",
                 f"- **Evidence:** {r.editor_rationale}",
                 f"- **Suggested fix:** {r.suggested_fix}",
-                ticket_line,
+                _ticket_line_markdown(ticket_by_finding.get(i)),
             ]
 
     return "\n".join(lines)
+
+
+# Severity -> (accent color, tint background), standard red/orange/amber/blue
+# risk-coding so the reader's eye sorts by severity before reading a word.
+_SEVERITY_STYLE = {
+    "critical": ("#B91C1C", "#FEF2F2"),
+    "high": ("#C2410C", "#FFF7ED"),
+    "medium": ("#A16207", "#FFFBEB"),
+    "low": ("#1D4ED8", "#EFF6FF"),
+}
+_DEFAULT_SEVERITY_STYLE = ("#374151", "#F3F4F6")
+
+
+def _esc(text: str) -> str:
+    # Findings text comes from an LLM and has, in practice, contained literal
+    # HTML snippets (e.g. a suggested fix quoting `<img alt="...">`) -- escape
+    # everything interpolated into the template or it renders as markup
+    # instead of visible text, or worse, breaks the page structure.
+    return html_lib.escape(str(text))
+
+
+def _stat_badge(count: int, label: str, color: str) -> str:
+    return (
+        f'<div class="stat" style="border-top:3px solid {color}">'
+        f'<div class="n" style="color:{color}">{count}</div>'
+        f'<div class="l">{_esc(label)}</div></div>'
+    )
+
+
+def _finding_card(index: int, r: RankedFinding, ticket: str | None) -> str:
+    accent, tint = _SEVERITY_STYLE.get(r.severity.lower(), _DEFAULT_SEVERITY_STYLE)
+    if ticket:
+        ticket_html = f'<span class="badge" style="background:#DCFCE7;color:#15803D">Filed: {_esc(ticket)}</span>'
+    else:
+        ticket_html = (
+            '<span class="badge" style="background:#FEF9C3;color:#854D0E">Pending SME review</span>'
+        )
+    return f"""
+    <div class="finding" style="border-left-color:{accent}">
+      <div class="finding-header">
+        <h3>{index + 1}. WCAG {_esc(r.wcag_criterion)}</h3>
+        <span class="badge" style="background:{tint};color:{accent}">{_esc(r.severity)}</span>
+      </div>
+      <div class="field"><span class="k">Page</span> {_esc(r.page_url)}</div>
+      <div class="field"><span class="k">Risk score</span> {r.risk_score:.0f}/100</div>
+      <div class="field"><span class="k">Why it matters</span> {_esc(r.risk_rationale)}</div>
+      <div class="field"><span class="k">Evidence</span> {_esc(r.editor_rationale)}</div>
+      <div class="field"><span class="k">Suggested fix</span></div>
+      <div class="fix-box">{_esc(r.suggested_fix)}</div>
+      <div class="field" style="margin-top:10px">{ticket_html}</div>
+    </div>"""
+
+
+_HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accessibility Report — {title_url}</title>
+<style>
+  :root {{
+    --bg: #f7f8fa; --surface: #ffffff; --text: #1b1e24;
+    --text-muted: #5b6472; --border: #dde1e8; --brand: #5b54c9;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+  }}
+  .page {{ max-width: 820px; margin: 0 auto; padding: 40px 24px 56px; }}
+  header {{ border-bottom: 3px solid var(--brand); padding-bottom: 20px; margin-bottom: 28px; }}
+  .brand {{ font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand); font-weight: 700; }}
+  h1 {{ font-size: 26px; margin: 6px 0 4px; word-break: break-word; }}
+  .meta {{ color: var(--text-muted); font-size: 14px; }}
+  .summary-box {{
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 24px; margin-bottom: 20px;
+  }}
+  .summary-box h2, .findings h2 {{
+    margin-top: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted);
+  }}
+  .summary-box p {{ font-size: 15px; margin-bottom: 0; }}
+  .stat-bar {{ display: flex; gap: 12px; margin: 0 0 28px; flex-wrap: wrap; }}
+  .stat {{
+    flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 18px; text-align: center; min-width: 90px;
+  }}
+  .stat .n {{ font-size: 26px; font-weight: 700; line-height: 1.2; }}
+  .stat .l {{ font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }}
+  .finding {{
+    background: var(--surface); border: 1px solid var(--border); border-left-width: 5px;
+    border-radius: 8px; padding: 18px 22px; margin-bottom: 14px;
+  }}
+  .finding-header {{ display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }}
+  .badge {{
+    display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
+  }}
+  .finding h3 {{ margin: 0; font-size: 16px; }}
+  .field {{ margin: 8px 0; font-size: 14px; }}
+  .field .k {{ color: var(--text-muted); font-weight: 600; display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }}
+  .fix-box {{
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px; white-space: pre-wrap; word-break: break-word;
+  }}
+  .empty {{ background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; text-align: center; color: var(--text-muted); }}
+  footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="brand">MAD Platform — Accessibility Report</div>
+    <h1>{title_url}</h1>
+    <div class="meta">Generated {generated_at}</div>
+  </header>
+
+  <div class="summary-box">
+    <h2>Summary</h2>
+    <p>{exec_summary}</p>
+  </div>
+
+  <div class="stat-bar">
+    {stat_badges}
+  </div>
+
+  <div class="findings">
+    <h2>Findings ({count})</h2>
+    {finding_cards}
+  </div>
+
+  <footer>
+    MAD Platform — autonomous, AI-assisted WCAG accessibility scanning with independent
+    verification before anything is reported. Findings are sorted by real-world risk,
+    not raw technical severity alone.
+  </footer>
+</div>
+</body>
+</html>
+"""
+
+
+def _render_html(
+    url: str, generated_at: str, exec_summary: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None]
+) -> str:
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for r in ranked:
+        counts[r.severity.lower()] = counts.get(r.severity.lower(), 0) + 1
+
+    stat_badges = _stat_badge(len(ranked), "Total findings", "#374151") + "".join(
+        _stat_badge(counts.get(sev, 0), sev.capitalize(), _SEVERITY_STYLE[sev][0]) for sev in ("critical", "high", "medium", "low")
+    )
+
+    if not ranked:
+        finding_cards = '<div class="empty">No confirmed findings on the pages checked.</div>'
+    else:
+        finding_cards = "".join(_finding_card(i, r, ticket_by_finding.get(i)) for i, r in enumerate(ranked))
+
+    return _HTML_TEMPLATE.format(
+        title_url=_esc(url),
+        generated_at=_esc(generated_at),
+        exec_summary=_esc(exec_summary),
+        stat_badges=stat_badges,
+        count=len(ranked),
+        finding_cards=finding_cards,
+    )
+
+
+def render_reports(
+    url: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None] | None = None
+) -> ReportBundle:
+    """Builds the Markdown and HTML versions of the report from the same
+    underlying data and a single executive-summary call -- both formats
+    must show identical findings and the same summary text, so the LLM
+    call happens once here rather than once per format.
+    """
+    ticket_by_finding = ticket_by_finding or {}
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    exec_summary = generate_executive_summary(url, ranked)
+
+    return ReportBundle(
+        markdown=_render_markdown(url, generated_at, exec_summary, ranked, ticket_by_finding),
+        html=_render_html(url, generated_at, exec_summary, ranked, ticket_by_finding),
+    )
+
+
+def draft_report(url: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None] | None = None) -> str:
+    """Back-compat convenience wrapper: Markdown only. Prefer render_reports
+    when both formats are needed, so the summary isn't generated twice.
+    """
+    return render_reports(url, ranked, ticket_by_finding).markdown

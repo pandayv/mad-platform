@@ -45,14 +45,16 @@ def main() -> None:
         print(f"  {len(confirmed)} confirmed, {len(dismissed)} dismissed by Editor")
 
     REPORTS_DIR.mkdir(exist_ok=True)
-    local_path = REPORTS_DIR / f"{result.job_id}.md"
-    local_path.write_text(result.report)
+    local_html_path = REPORTS_DIR / f"{result.job_id}.html"
+    local_html_path.write_text(result.report_html)
 
     print(f"\n{'=' * 78}")
     print("REPORT")
     print(f"{'=' * 78}")
-    print(f"Local file:    {local_path}")
-    print(f"Cloud Storage: {result.report_uri}  (gs:// -- needs gcloud/Console to open, not a browser link)")
+    print(f"Open locally:   file://{local_html_path.resolve()}")
+    print(f"Report folder:  {result.report_folder_url}  (Console -- log into the GCP project to browse)")
+    for ext, uri in result.report_uris.items():
+        print(f"  {ext}: {uri}")
     print()
     print(result.report)
 
