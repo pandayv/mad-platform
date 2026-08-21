@@ -56,18 +56,36 @@ what else looks appealing.
 - [x] 10. Vertex AI (not Google AI Studio) — `aiplatform.googleapis.com`
       enabled, `roles/aiplatform.user` granted only to
       `scan-wcag-poller-sa` and `scan-orchestrator-sa`
-- [ ] 11. Confirm the exact available Gemini model ID in-console (don't
-      hardcode a guessed name)
+- [x] 11. Confirmed via `client.models.list()`: only Flash-tier models meet
+      "Gemini 3.5+" in this project — `gemini-3.5-flash`,
+      `gemini-3.5-flash-lite`, `gemini-3.6-flash`, `gemini-3.7-flash`. No
+      Pro-tier model exists at that version floor — see `REQUIREMENTS.md`
+      §6.3 for the resulting tiering adjustment.
 
 ## Local dev environment
 
-- [ ] 12. ADK docs: https://google.github.io/adk-docs
-- [ ] 13. ADK source: https://github.com/google/adk-python
-- [ ] 14. `pip install google-adk`, run a minimal hello-world agent before
-      building anything real — **next real milestone**: the four Cloud Run
-      services are live but running Google's placeholder "hello" image;
-      this is where actual Orchestrator/Analyst/Editor/Reporter code
-      replaces that.
+- [x] 12. ADK docs: https://google.github.io/adk-docs
+- [x] 13. ADK source: https://github.com/google/adk-python
+- [x] 14. **Hello-world agent confirmed working end-to-end (2026-08-21)**:
+      `.venv` (Python 3.14, not 3.9 — see below), `adk create`, ran through
+      the real `adk` CLI against Vertex AI, got a correct response back.
+      Two real gotchas hit and fixed along the way, both apply to every
+      future service, not just this one:
+      - **Python 3.9 → 3.14**: started on system Python 3.9 (google-adk
+        installs fine there), but `adk` itself warned "MCP requires Python
+        3.10 or above" — a real capability gap, not cosmetic, plus constant
+        google-auth/api_core EOL warnings on every command. Switched to
+        Python 3.14 (via Homebrew) before writing any real code, since this
+        underlies everything going forward. Project venv lives at `.venv/`
+        in the repo root (gitignored).
+      - **Region: `global`, not `us-central1`.** `gemini-3.5-flash-lite`
+        appears in the Vertex AI model catalog listing regardless of
+        location queried, but actually calling it in `us-central1` 404s —
+        "Publisher model ... was not found ... in the specified region."
+        `location='global'` works. **Every future service's Vertex AI
+        client must use `global`, not `us-central1`**, despite Cloud Run
+        itself being deployed in `us-central1` — these are independent
+        settings, don't assume they need to match.
 - [ ] 15. Docker Desktop: https://www.docker.com/products/docker-desktop/
 - [ ] 16. Playwright Python: https://playwright.dev/python/docs/intro —
       `pip install playwright && playwright install chromium`
