@@ -37,6 +37,44 @@ issues, checks its own work before trusting it, explains what matters most
 in plain language, and files the confirmed ones as tickets automatically —
 while routing the genuinely uncertain ones to a human instead of guessing.
 
+## What makes this different
+
+Most accessibility scanners stop at detection. Four things here go
+further, and most agentic projects don't attempt any of them together:
+
+**It remembers — and its judgment measurably improves because of it.**
+Every dismissed finding keeps its reason. A second, self-hosted model —
+Gemma, not Gemini, running on its own Cloud Run Job — periodically mines
+that history for patterns no one's flagged yet: the same false positive,
+dismissed the same way, across scans of completely unrelated sites. A
+human confirms each real pattern once, and it becomes permanent grounding
+for every scan after that. This isn't a cache or a prompt template — it's
+the pipeline's actual judgment changing based on its own accumulated
+experience, proven against this project's real usage history, not
+synthetic examples built to demo well.
+
+**It watches its own knowledge for drift, not just the website's.**
+WCAG itself changes over time. A scheduled check compares the standard's
+current version against what the knowledge base was built on, classifies
+what changed, and either refreshes automatically (additive, low-risk
+updates) or stops and asks a person first (anything structural). The
+reference material a citation is grounded in never goes stale, and it
+never gets silently reinterpreted without oversight either.
+
+**It sees the rendered page, not just the markup.**
+One of Analyst's three parallel checks is genuinely multimodal: a real
+screenshot of the live page goes to Gemini for visual judgment — focus
+indicators, actual rendered contrast — the things that exist on screen
+but never show up in the HTML source. Vision doing real work in the
+pipeline, not a label on a text-only system.
+
+**It acts, and the action is accountable.**
+A confirmed finding becomes a real Jira ticket, automatically. Anything
+critical or uncertain routes to a human instead, with a live Slack alert
+the moment it happens — not a silent queue nobody checks. Every action is
+idempotent, so a retried step never double-files: autonomous doesn't mean
+unaccountable here.
+
 ## What it does
 
 1. **Scans a site autonomously** — decides which pages matter most on its
@@ -76,35 +114,27 @@ When it's done, you get a score, a severity breakdown, and the full report:
 
 ## How it works
 
-- **Pick the right orchestration pattern for each step.** Pipeline stages
-  that must happen in order run sequentially (crawl → analyze → verify →
-  rank → act → report); independent per-page checks run in parallel;
-  dynamic delegation is reserved for genuine judgment calls, like which
-  pages are worth scanning or whether a page's analysis needs a second
-  pass.
-- **Make resumability a real mechanism, not a claim.** Every stage
+The mechanics behind the four differentiators above:
+
+- **The right orchestration pattern for each step.** Pipeline stages that
+  must happen in order run sequentially (crawl → analyze → verify → rank
+  → act → report); independent per-page checks run in parallel; dynamic
+  delegation is reserved for genuine judgment calls, like which pages are
+  worth scanning or whether a page's analysis needs a second pass, capped
+  at exactly one retry — never an open-ended loop.
+- **Resumability as a real mechanism, not a claim.** Every stage
   checkpoints its completion to Firestore as it finishes. A restart —
   crash, redeploy — resumes from the last completed stage instead of
   starting over or silently duplicating work.
-- **Give autonomous judgment a bounded feedback loop.** A capped retry
-  gate decides whether a page's analysis is good enough or needs one more
-  pass — never an open-ended loop. Separately, the WCAG auto-heal loop
-  detects when the accessibility standard itself changes, classifies the
-  change, and either refreshes automatically or asks a person first.
-- **Ground claims in real data instead of a model's memory.** WCAG success
-  criteria are embedded once and retrieved to back every citation, so a
-  finding's WCAG reference is grounded in the actual standard rather than
-  an LLM's unverified recollection — and the auto-heal loop keeps that
-  reference material from going stale.
-- **Let the system learn from its own history.** A self-hosted Gemma model
-  (Ollama, baked into its own Cloud Run Job, triggered weekly by Cloud
-  Scheduler) periodically mines Editor's real dismissal history for
-  recurring, consistent false-positive patterns — a background batch job,
-  exactly the workload Gemma's on-device design targets, distinct from the
-  real-time Gemini calls everywhere else. A person confirms each mined
-  pattern through the same review queue used for everything else; only confirmed
-  patterns become persistent memory that grounds Editor on every future
-  scan.
+- **Citations grounded in retrieval, not recollection.** WCAG success
+  criteria are embedded once and retrieved to back every finding, so a
+  citation reflects the actual standard rather than an LLM's unverified
+  memory of it.
+- **The Gemma memory loop, concretely.** Cloud Scheduler triggers a
+  dedicated Cloud Run Job weekly; Ollama serves `gemma3:4b` inside it,
+  baked into the image rather than pulled per run; the job clusters
+  Editor's real dismissal history by WCAG criterion and proposes anything
+  consistent through the same SME review queue as everything else.
 
 Every irreversible action — filing a ticket, refreshing the knowledge base,
 adopting a learned pattern — is either idempotent, gated behind human
