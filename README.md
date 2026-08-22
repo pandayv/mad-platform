@@ -96,11 +96,19 @@ When it's done, you get a score, a severity breakdown, and the full report:
   finding's WCAG reference is grounded in the actual standard rather than
   an LLM's unverified recollection — and the auto-heal loop keeps that
   reference material from going stale.
+- **Let the system learn from its own history.** A locally-run Gemma model
+  periodically mines Editor's real dismissal history for recurring,
+  consistent false-positive patterns — a background batch job, exactly the
+  workload Gemma's on-device design targets, distinct from the real-time
+  Gemini calls everywhere else. A person confirms each mined pattern
+  through the same review queue used for everything else; only confirmed
+  patterns become persistent memory that grounds Editor on every future
+  scan.
 
-Every irreversible action — filing a ticket, refreshing the knowledge base
-— is either idempotent, gated behind human approval, or both: a retried
-pipeline step never double-files, and a structural change to the
-accessibility standard never gets auto-applied without a person looking at
+Every irreversible action — filing a ticket, refreshing the knowledge base,
+adopting a learned pattern — is either idempotent, gated behind human
+approval, or both: a retried pipeline step never double-files, and nothing
+that changes future judgment gets auto-applied without a person looking at
 it first.
 
 ## Product layer vs. platform layer
@@ -115,7 +123,10 @@ it first.
 ## Tech stack
 
 - **AI:** Gemini via Vertex AI (`gemini-3.5-flash-lite` for high-volume
-  calls, `gemini-3.7-flash` for judgment calls)
+  calls, `gemini-3.7-flash` for judgment calls) for every real-time,
+  user-facing call; a locally-run Gemma (`gemma3:4b` via Ollama) for the
+  one background batch job (dismissal-pattern mining) that has no
+  live-latency pressure
 - **Agent framework:** Google Agent Development Kit (ADK)
 - **Compute:** Cloud Run (scale-to-zero), four services split by trigger
   type and resource profile

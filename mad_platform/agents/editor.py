@@ -12,10 +12,12 @@ similarity isn't guaranteed to surface the single best match (e.g.
 over the actually-correct Name/Role/Value one), so Editor reasons over
 what's retrieved rather than blindly adopting it.
 
-The written rationale on every dismissal is required even though nothing
-consumes it yet -- it's the seed of a future feedback loop that could tune
-Analyst's flagging behavior from accumulated dismissal patterns, so the
-data shape needs to be right from the start even before that loop exists.
+The written rationale on every dismissal is required for exactly this
+reason: mad_platform/agents/pattern_miner.py mines accumulated dismissal
+history for recurring, SME-confirmed patterns, which come back here as
+grounding on every future call (see _format_learned_patterns) -- the
+persistent-memory loop the rest of this docstring used to describe as
+future work.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from mad_platform.agents.analyst import RawFinding
+from mad_platform.state import firestore_client as fs
 from mad_platform.tools.adk_client import generate_structured
 from mad_platform.tools.crawler import PageSnapshot
 from mad_platform.tools.gemini_client import FLASH
@@ -67,7 +70,7 @@ it -- these are the CLOSEST semantic matches found, not a guaranteed
 correct answer. Use them to ground your citation when they genuinely fit;
 if none of the candidates match the actual issue, use your own knowledge
 instead rather than forcing a bad fit.
-
+{learned_patterns}
 Findings to verify (index: source, check, Analyst's WCAG guess, description, selector, Analyst's own confidence, retrieved reference candidates):
 {findings_list}
 
@@ -75,6 +78,20 @@ Page title: {title}
 HTML excerpt:
 {html_excerpt}
 """
+
+
+def _format_learned_patterns(patterns: list[dict]) -> str:
+    if not patterns:
+        return ""
+    lines = "\n".join(
+        f"- WCAG {p['wcag_criterion']}: {p['pattern_description']}" for p in patterns
+    )
+    return (
+        "\nKnown dismissal patterns, confirmed by a human reviewer from this "
+        "system's own history -- weigh a matching finding accordingly, but "
+        "still verify against the actual evidence rather than dismissing on "
+        "pattern match alone:\n" + lines + "\n"
+    )
 
 
 def _format_findings(findings: list[RawFinding]) -> str:
@@ -95,6 +112,7 @@ async def verify_findings(snapshot: PageSnapshot, findings: list[RawFinding]) ->
         return []
 
     prompt = _EDITOR_PROMPT.format(
+        learned_patterns=_format_learned_patterns(fs.list_learned_patterns()),
         findings_list=_format_findings(findings),
         title=snapshot.title,
         html_excerpt=snapshot.html[:8000],
