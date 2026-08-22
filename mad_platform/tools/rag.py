@@ -20,6 +20,7 @@ from google.cloud import firestore
 
 from mad_platform.data.wcag_corpus import WCAG_CORPUS, WCAGCriterion
 from mad_platform.tools.gemini_client import embed as _embed
+from mad_platform.tools.gemini_client import embed_batch as _embed_batch
 
 _PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "project-d7e6174e-cca7-4d16-9d5")
 _DATABASE = "scan-firestore"
@@ -80,10 +81,23 @@ def retrieve(query: str, top_k: int = 1) -> list[WCAGCriterion]:
     """Embeds the query and returns the top_k most similar WCAG criteria
     from the stored corpus, by cosine similarity.
     """
+    return _score_and_rank(_embed(query), top_k) if _load_cache() else []
+
+
+def retrieve_batch(queries: list[str], top_k: int = 1) -> list[list[WCAGCriterion]]:
+    """Same as retrieve(), for many queries at once -- one embedding call
+    instead of one per query, so grounding a whole page's findings costs a
+    single round trip rather than scaling with the number of findings.
+    """
     corpus = _load_cache()
-    if not corpus:
-        return []
-    query_embedding = _embed(query)
+    if not corpus or not queries:
+        return [[] for _ in queries]
+    query_embeddings = _embed_batch(queries)
+    return [_score_and_rank(qe, top_k) for qe in query_embeddings]
+
+
+def _score_and_rank(query_embedding: list[float], top_k: int) -> list[WCAGCriterion]:
+    corpus = _load_cache()
     scored = [(_cosine_similarity(query_embedding, emb), criterion) for criterion, emb in corpus]
     scored.sort(key=lambda x: x[0], reverse=True)
     return [criterion for _, criterion in scored[:top_k]]

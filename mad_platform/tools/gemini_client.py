@@ -90,3 +90,18 @@ def embed(text: str) -> list[float]:
         return list(result.embeddings[0].values)
 
     return _with_retry(_call)
+
+
+def embed_batch(texts: list[str]) -> list[list[float]]:
+    """Embeds many texts in one API call instead of one call per text --
+    the embedding model accepts a list natively, so grounding N findings
+    against the WCAG corpus costs one call, not N.
+    """
+    if not texts:
+        return []
+
+    def _call():
+        result = _client.models.embed_content(model=EMBEDDING_MODEL, contents=texts)
+        return [list(e.values) for e in result.embeddings]
+
+    return _with_retry(_call)

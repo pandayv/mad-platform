@@ -25,7 +25,7 @@ from pydantic import BaseModel
 from mad_platform.agents.analyst import RawFinding
 from mad_platform.tools.crawler import PageSnapshot
 from mad_platform.tools.gemini_client import FLASH, generate_structured
-from mad_platform.tools.rag import retrieve as rag_retrieve
+from mad_platform.tools.rag import retrieve_batch as rag_retrieve_batch
 
 
 class VerifiedFinding(BaseModel):
@@ -77,9 +77,9 @@ HTML excerpt:
 
 
 def _format_findings(findings: list[RawFinding]) -> str:
+    all_candidates = rag_retrieve_batch([f.description for f in findings], top_k=3)
     lines = []
-    for i, f in enumerate(findings):
-        candidates = rag_retrieve(f.description, top_k=3)
+    for i, (f, candidates) in enumerate(zip(findings, all_candidates)):
         candidates_text = "; ".join(f"{c.number} {c.title} ({c.level})" for c in candidates) or "none found"
         lines.append(
             f"{i}: [{f.source}/{f.check}] Analyst guessed WCAG {f.wcag_criterion} -- {f.description} "
