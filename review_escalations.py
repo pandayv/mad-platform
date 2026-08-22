@@ -12,16 +12,31 @@ from __future__ import annotations
 
 import argparse
 
+import os
+
 from mad_platform.agents.action_agent import resolve_escalation
+from mad_platform.agents.pattern_miner import resolve_pattern_escalation
 from mad_platform.agents.wcag_auto_heal import resolve_kb_escalation
 from mad_platform.state import firestore_client as fs
-from mad_platform.tools.issue_sink import MockIssueSink
+from mad_platform.tools.issue_sink import IssueSink, JiraIssueSink, MockIssueSink
+
+
+def _issue_sink() -> IssueSink:
+    """Real Jira when JIRA_URL is set in the environment (the live app
+    reads the same credentials from Secret Manager); MockIssueSink
+    otherwise, so this still runs without live Jira credentials.
+    """
+    if os.environ.get("JIRA_URL"):
+        return JiraIssueSink()
+    return MockIssueSink()
 
 
 def list_pending() -> None:
-    """Two kinds of escalation share this one queue -- a low-confidence or
-    critical finding, or a WCAG version change the auto-heal loop couldn't
-    confidently classify as minor. Same human-approval mechanism, two
+    """Three kinds of escalation share this one queue -- a low-confidence
+    or critical finding, a WCAG version change the auto-heal loop
+    couldn't confidently classify as minor, or a mined dismissal pattern
+    (mad_platform/agents/pattern_miner.py) awaiting confirmation before it
+    becomes persistent memory. Same human-approval mechanism, three
     different judgment calls behind it.
     """
     pending = fs.list_pending_escalations()
@@ -36,6 +51,11 @@ def list_pending() -> None:
             print(f"  {e['old_version']} -> {e['new_version']}  (classified: {e['change_type']}, confidence={e['confidence']:.2f})")
             print(f"  Reasoning: {e['reasoning']}")
             print(f"  Why flagged: not a confident 'minor' classification -- needs review before re-embedding")
+        elif e.get("kind") == "learned_pattern":
+            print(f"  Type: learned dismissal pattern (Gemma-mined)")
+            print(f"  WCAG {e['wcag_criterion']}  seen {e['occurrence_count']} time(s)  confidence={e['confidence']:.2f}")
+            print(f"  Pattern: {e['pattern_description']}")
+            print(f"  Why flagged: needs confirmation before it grounds Editor's prompt on future scans")
         else:
             print(f"  Page: {e['page_url']}")
             print(f"  WCAG {e['wcag_criterion']}  severity={e['severity']}  confidence={e['editor_confidence']:.2f}")
@@ -50,7 +70,8 @@ def resolve(escalation_id: str, disposition: str) -> None:
         print(f"No pending escalation with id {escalation_id!r}.")
         return
 
-    if escalation.get("kind") == "kb_version_change":
+    kind = escalation.get("kind")
+    if kind == "kb_version_change":
         resolve_kb_escalation(escalation_id, disposition=disposition, reviewer="cli-review")
         if disposition == "confirm":
             print(f"Confirmed. Knowledge base re-embedded and advanced to {escalation['new_version']}.")
@@ -58,8 +79,15 @@ def resolve(escalation_id: str, disposition: str) -> None:
             print(f"Dismissed. Knowledge base stays on its current version -- corpus needs a real content update first.")
         return
 
-    sink = MockIssueSink()  # real Jira credentials not yet configured
-    ticket = resolve_escalation(sink, escalation_id, disposition=disposition, reviewer="cli-review")
+    if kind == "learned_pattern":
+        resolve_pattern_escalation(escalation_id, disposition=disposition, reviewer="cli-review")
+        if disposition == "confirm":
+            print(f"Confirmed. This pattern now grounds Editor's prompt on every future scan.")
+        else:
+            print("Dismissed. Discarded -- the miner won't re-propose this exact pattern.")
+        return
+
+    ticket = resolve_escalation(_issue_sink(), escalation_id, disposition=disposition, reviewer="cli-review")
     if disposition == "confirm":
         print(f"Confirmed. Ticket filed: {ticket}")
     else:

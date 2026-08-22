@@ -422,9 +422,10 @@ footer a:hover { text-decoration: underline; }
         </div>
         <div class="step-desc">One escalation gate: low confidence or critical severity routes to a human; everything else is fully autonomous.</div>
         <div class="route-split">
-          <div class="branch-item" style="background:var(--accent-tool-tint)"><b>Action Agent</b>Files a ticket automatically. Idempotent — a retried step never double-files.<div class="lens-tags"><span class="lens-tag">idempotency</span></div></div>
-          <div class="branch-item" style="background:var(--accent-human-tint)"><b>SME review queue</b>Confirm → files the ticket. Dismiss → never becomes a ticket.<div class="lens-tags"><span class="lens-tag">human approval</span></div></div>
+          <div class="branch-item" style="background:var(--accent-tool-tint)"><b>Action Agent</b>Files a real Jira ticket automatically. Idempotent — a retried step never double-files.<div class="lens-tags"><span class="lens-tag">idempotency</span></div></div>
+          <div class="branch-item" style="background:var(--accent-human-tint)"><b>SME review queue</b>Confirm → files the ticket, live-updates the report the customer already has open. Dismiss → never becomes a ticket.<div class="lens-tags"><span class="lens-tag">human approval</span></div></div>
         </div>
+        <div class="step-desc" style="margin-top:10px">Both paths post to <b>Slack</b> — a real-time alert when something's escalated, a summary when the scan completes.</div>
       </div>
     </div>
 
@@ -447,6 +448,24 @@ footer a:hover { text-decoration: underline; }
 </div>
 
 <div class="zone">
+  <div class="zone-label">Memory — Analyst/Editor's own judgment</div>
+  <div class="zone-note">Distinct from the knowledge base above: that loop keeps reference material current, this one tunes the pipeline's own behavior from its real history. A self-hosted Gemma, not Vertex AI — a background batch job with no live-request latency, exactly the workload Gemma's on-device design targets.</div>
+  <div class="loop-diagram">
+    <div class="loop-node mono">Editor's dismissal history</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-node mono">Weekly Scheduler tick</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-node mono">Cloud Run Job — self-hosted Gemma</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-node decision mono">Consistent pattern?</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-node mono">SME review queue</div>
+  </div>
+  <div class="step-desc" style="margin-top:10px">Confirmed → grounds Editor's prompt on every future scan.</div>
+  <div class="lens-tags" style="margin-top:14px"><span class="lens-tag">persistent memory</span><span class="lens-tag">feedback loop — self-improving</span><span class="lens-tag">human approval before judgment changes</span><span class="lens-tag">Gemma — self-hosted</span></div>
+</div>
+
+<div class="zone">
   <div class="zone-label">Resumability</div>
   <div class="zone-note">Every stage above checkpoints its completion to Firestore as it finishes. A restart — crash, redeploy — reads the last completed checkpoint and resumes from the next incomplete stage. It never blindly restarts from the top, and never assumes a stage completed just because the job record exists.</div>
   <div class="lens-tags"><span class="lens-tag">resumability</span><span class="lens-tag">crash-safe by design</span></div>
@@ -455,12 +474,16 @@ footer a:hover { text-decoration: underline; }
 <div class="zone">
   <div class="zone-label">Google Cloud infrastructure</div>
   <div class="infra-grid">
-    <div class="infra-item"><div class="name">Cloud Run</div><div class="role">4 services, scale-to-zero, least-privilege per service</div></div>
+    <div class="infra-item"><div class="name">Cloud Run</div><div class="role">4 scale-to-zero services + 1 Job, least-privilege per service</div></div>
+    <div class="infra-item"><div class="name">Google ADK</div><div class="role">LlmAgent + Runner wraps every real-time Gemini call</div></div>
     <div class="infra-item"><div class="name">Vertex AI · Gemini</div><div class="role">Flash-lite for volume, Flash for judgment calls</div></div>
-    <div class="infra-item"><div class="name">Firestore</div><div class="role">Job checkpoints, findings, escalations, KB version</div></div>
+    <div class="infra-item"><div class="name">Ollama · Gemma</div><div class="role">Self-hosted on the pattern-miner Job — the one background call, not real-time</div></div>
+    <div class="infra-item"><div class="name">Firestore</div><div class="role">Job checkpoints, findings, escalations, KB version, learned patterns</div></div>
     <div class="infra-item"><div class="name">Cloud Storage</div><div class="role">Generated HTML reports</div></div>
-    <div class="infra-item"><div class="name">Cloud Scheduler</div><div class="role">Drives the WCAG freshness tick</div></div>
-    <div class="infra-item"><div class="name">Secret Manager</div><div class="role">Access codes, ticketing credentials</div></div>
+    <div class="infra-item"><div class="name">Cloud Scheduler</div><div class="role">WCAG freshness tick (6h), Gemma pattern-miner (weekly)</div></div>
+    <div class="infra-item"><div class="name">Secret Manager</div><div class="role">Access codes, Jira + Slack credentials</div></div>
+    <div class="infra-item"><div class="name">Jira Cloud</div><div class="role">Real ticket filing — not a mock sink in production</div></div>
+    <div class="infra-item"><div class="name">Slack</div><div class="role">Real-time escalation alerts, scan-complete summaries</div></div>
     <div class="infra-item"><div class="name">Playwright</div><div class="role">Headless render, screenshot, computed styles</div></div>
   </div>
 </div>
