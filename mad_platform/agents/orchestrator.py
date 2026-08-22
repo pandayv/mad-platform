@@ -13,6 +13,7 @@ re-crawl.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
 
@@ -25,12 +26,17 @@ from mad_platform.agents.editor import VerifiedFinding, verify_findings
 from mad_platform.agents.reporter import RankedFinding, draft_report, rank_and_recommend
 from mad_platform.state import firestore_client as fs
 from mad_platform.state import storage_client
+from mad_platform.tools import notify
 from mad_platform.tools.adk_client import generate_structured
 from mad_platform.tools.crawler import PageSnapshot, fetch_page
 from mad_platform.tools.gemini_client import FLASH, FLASH_LITE
 from mad_platform.tools.issue_sink import IssueSink, MockIssueSink
 
 MAX_ADDITIONAL_PAGES = 2
+
+_APP_BASE_URL = os.environ.get(
+    "MAD_APP_BASE_URL", "https://scan-onboarding-803013053073.us-central1.run.app"
+)
 
 
 class _PageSelection(BaseModel):
@@ -267,6 +273,16 @@ async def run_one_time_scan(
         report = await draft_report(url, ranked, ticket_by_finding, escalation_by_finding)
         report_uri = storage_client.save_report(job_id, report)
         fs.complete_job(job_id)
+
+        notify.summary(
+            f"Scan complete: {url}",
+            [
+                f"{len(ranked)} confirmed finding(s) across {len(pages)} page(s)",
+                f"Filed automatically: {len(filing['filed']) + len(filing['already_filed'])}",
+                f"Escalated to SME review: {len(filing['escalated'])}",
+                f"Report: {_APP_BASE_URL}/report/{job_id}",
+            ],
+        )
     except Exception as exc:  # noqa: BLE001
         if job_id is not None:  # only unset if fs.create_job itself is what failed
             fs.fail_job(job_id, str(exc))

@@ -18,12 +18,18 @@ calls, no LLM judgment of its own.
 from __future__ import annotations
 
 import hashlib
+import os
 
 from mad_platform.agents.reporter import RankedFinding
 from mad_platform.state import firestore_client as fs
+from mad_platform.tools import notify
 from mad_platform.tools.issue_sink import IssueSink
 
 LOW_CONFIDENCE_THRESHOLD = 0.6
+
+_APP_BASE_URL = os.environ.get(
+    "MAD_APP_BASE_URL", "https://scan-onboarding-803013053073.us-central1.run.app"
+)
 
 
 def idempotency_key(page_url: str, finding: RankedFinding) -> str:
@@ -82,6 +88,14 @@ def route_and_file(sink: IssueSink, ranked: list[RankedFinding]) -> dict[str, li
                     "risk_rationale": finding.risk_rationale,
                     "suggested_fix": finding.suggested_fix,
                 },
+            )
+            notify.alert(
+                "Accessibility finding needs SME review",
+                [
+                    f"WCAG {finding.wcag_criterion} — {finding.severity} — {finding.page_url}",
+                    f"Editor confidence: {finding.editor_confidence:.2f}",
+                    f"Review: {_APP_BASE_URL}/review/{key}",
+                ],
             )
             result["escalated"].append((index, finding, key))
             continue

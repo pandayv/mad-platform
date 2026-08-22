@@ -20,6 +20,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from mad_platform.state import firestore_client as fs
+from mad_platform.tools import notify
 from mad_platform.tools.adk_client import generate_structured
 from mad_platform.tools.gemini_client import FLASH
 from mad_platform.tools.rag import embed_and_store_corpus
@@ -102,6 +103,14 @@ async def run_wcag_freshness_check(simulate_current_version: str | None = None) 
             "confidence": classification.confidence,
             "reasoning": classification.reasoning,
         },
+    )
+    notify.alert(
+        "WCAG knowledge base version change needs review",
+        [
+            f"{stored_version} → {current_version} (classified {classification.change_type}, "
+            f"confidence {classification.confidence:.2f})",
+            classification.reasoning,
+        ],
     )
     return {
         "action": "escalated",
