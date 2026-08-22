@@ -1,0 +1,25 @@
+# Cloud Run Job for mad_platform/agents/pattern_miner.py -- bakes the
+# gemma3:4b weights into the image at build time rather than pulling
+# them on every execution, so a periodic batch job doesn't pay a
+# multi-GB download on every run. Bigger, slower build than the other
+# two images here; that's a one-time cost, not a recurring one.
+FROM ollama/ollama:latest
+
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
+
+COPY mad_platform ./mad_platform
+COPY mine_patterns.py .
+COPY pattern_miner_entrypoint.sh .
+RUN chmod +x pattern_miner_entrypoint.sh
+
+# Start the server, pull the model into this layer's filesystem, let the
+# RUN instruction's shell exit (which tears down the backgrounded server) --
+# the pulled weights persist in the committed image either way.
+RUN ollama serve & sleep 5 && ollama pull gemma3:4b
+
+ENTRYPOINT ["./pattern_miner_entrypoint.sh"]

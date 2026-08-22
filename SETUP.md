@@ -37,6 +37,56 @@ order.
    Confirm which Gemini models are actually available in your project via
    `client.models.list()`; model availability varies by project.
 
+## Deploy the Gemma pattern-miner (Cloud Run Job)
+
+This is the one piece not covered by `gcp-deploy.sh` — a self-hosted
+Gemma model (Ollama, not Vertex AI) that periodically mines Editor's
+dismissal history for recurring false-positive patterns. Exact commands,
+run from the repo root with `gcloud` authenticated against your project:
+
+```bash
+# 1. Service account -- Firestore access only, no Vertex AI needed.
+gcloud iam service-accounts create pattern-miner-sa \
+  --display-name="Pattern Miner (Gemma dismissal-pattern batch job)"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:pattern-miner-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/datastore.user"
+
+# 2. Build the image -- bakes gemma3:4b into the image at build time
+#    (~5-10 min, slower than the other two images here on purpose, see
+#    Dockerfile.pattern_miner).
+gcloud builds submit --config=cloudbuild.pattern_miner.yaml --region=us-central1 \
+  --substitutions=_IMAGE="us-central1-docker.pkg.dev/YOUR_PROJECT_ID/mad-platform/pattern-miner:latest" .
+
+# 3. Create the Cloud Run Job (run-to-completion, not a Service).
+gcloud run jobs create pattern-miner \
+  --image=us-central1-docker.pkg.dev/YOUR_PROJECT_ID/mad-platform/pattern-miner:latest \
+  --region=us-central1 \
+  --service-account=pattern-miner-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --memory=4Gi --cpu=4 --task-timeout=600 --max-retries=0
+
+# 4. Let the existing Scheduler-invoker SA trigger this job too.
+gcloud run jobs add-iam-policy-binding pattern-miner --region=us-central1 \
+  --member="serviceAccount:scan-scheduler-invoker-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/run.invoker"
+
+# 5. Weekly Cloud Scheduler trigger (dismissal history accumulates slowly
+#    relative to scan volume -- no need to run this more often).
+gcloud scheduler jobs create http pattern-miner-tick \
+  --location=us-central1 \
+  --schedule="0 3 * * 0" \
+  --uri="https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/YOUR_PROJECT_ID/jobs/pattern-miner:run" \
+  --http-method=POST \
+  --oauth-service-account-email=scan-scheduler-invoker-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
+```
+
+To see it run immediately rather than waiting for the schedule:
+`gcloud run jobs execute pattern-miner --region=us-central1 --wait`, then
+check the output at `gcloud run jobs executions list --job=pattern-miner
+--region=us-central1` or in Cloud Logging.
+
 ## Local dev environment
 
 7. Python 3.10+ is required by the ADK toolchain; a modern 3.x install is
@@ -56,10 +106,17 @@ order.
 
 12. Jira Cloud (free tier) — for real ticket filing. Without this, the
     pipeline runs against a mock ticket sink, which is sufficient for
-    development and testing.
-13. Email sending (e.g. SendGrid free tier, or a dedicated account +
-    app password for SMTP) — for report delivery by email, not yet wired
-    up in this build.
+    development and testing. Requires an API token
+    (`id.atlassian.com/manage-profile/security/api-tokens`), the site
+    URL, account email, and project key; set `JIRA_URL`, `JIRA_EMAIL`,
+    `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY` (Cloud Run deploys these from
+    Secret Manager — see `mad_platform/tools/issue_sink.py`).
+13. Slack (free workspace) — for real-time alerts and scan-complete
+    summaries. Create an Incoming Webhook
+    (`api.slack.com/apps` → your app → Incoming Webhooks) and set
+    `SLACK_WEBHOOK_URL`. Without this, notifications are silently
+    skipped (`mad_platform/tools/notify.py`) — the pipeline itself
+    doesn't depend on it.
 
 ## Optional
 
