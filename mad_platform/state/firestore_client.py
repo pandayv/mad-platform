@@ -27,6 +27,7 @@ _JOBS = _client.collection("scan_jobs")
 _TICKETS = _client.collection("filed_tickets")  # idempotency_key -> ticket_id
 _ESCALATIONS = _client.collection("escalations")  # SME review queue
 _KB_VERSION = _client.collection("knowledge_base_version").document("wcag")
+_LEARNED_PATTERNS = _client.collection("learned_patterns")  # SME-confirmed Analyst/Editor patterns
 
 # Stages, in order -- used to answer "what's the next incomplete stage".
 PAGE_STAGES = ["crawled", "analyzed", "verified"]
@@ -178,6 +179,46 @@ def resolve_escalation(escalation_id: str, disposition: str, reviewer: str = "sm
         }
     )
     return data
+
+
+def iter_dismissed_findings() -> list[dict[str, Any]]:
+    """Every dismissed (confirmed=False) finding Editor has ever produced,
+    across every job -- the raw substrate the pattern miner clusters. Reads
+    the whole scan_jobs collection; fine at this project's volume, and
+    simpler than maintaining a second denormalized index for a batch job
+    that doesn't run on a tight schedule.
+    """
+    dismissed = []
+    for job_doc in _JOBS.stream():
+        job = job_doc.to_dict()
+        for page_url, page in job.get("pages", {}).items():
+            for f in page.get("findings", []):
+                if f.get("confirmed") is False:
+                    dismissed.append(
+                        {
+                            "job_id": job_doc.id,
+                            "page_url": page_url,
+                            "wcag_criterion": f.get("wcag_criterion", ""),
+                            "rationale": f.get("rationale", ""),
+                        }
+                    )
+    return dismissed
+
+
+def save_learned_pattern(pattern_id: str, data: dict[str, Any]) -> None:
+    """Persists an SME-confirmed dismissal pattern -- the actual persistent
+    memory Editor's prompt reads back on every future scan. Only ever
+    written after human confirmation (see pattern_miner.resolve_pattern_escalation);
+    a candidate pattern that's merely mined, not yet confirmed, lives only
+    in the escalations queue.
+    """
+    _LEARNED_PATTERNS.document(pattern_id).set(
+        {**data, "confirmed_at": datetime.now(timezone.utc)}
+    )
+
+
+def list_learned_patterns() -> list[dict[str, Any]]:
+    return [{"id": doc.id, **doc.to_dict()} for doc in _LEARNED_PATTERNS.stream()]
 
 
 def get_kb_version() -> dict[str, Any] | None:

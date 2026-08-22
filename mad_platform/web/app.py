@@ -26,6 +26,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 
 from mad_platform.agents.action_agent import resolve_escalation as resolve_finding_escalation
 from mad_platform.agents.orchestrator import run_one_time_scan
+from mad_platform.agents.pattern_miner import resolve_pattern_escalation
 from mad_platform.agents.reporter import compute_score, score_color
 from mad_platform.agents.wcag_auto_heal import resolve_kb_escalation
 from mad_platform.state import firestore_client as fs
@@ -432,11 +433,19 @@ def _render_review_login(error: str | None = None) -> str:
 
 def _review_item_row(e: dict) -> str:
     eid = html.escape(e["id"])
-    if e.get("kind") == "kb_version_change":
+    kind = e.get("kind")
+    if kind == "kb_version_change":
         return (
             f'<tr><td><span class="badge sev-low">KB version</span></td>'
             f"<td>WCAG {html.escape(str(e.get('old_version')))} → {html.escape(str(e.get('new_version')))} "
             f"— classified {html.escape(str(e.get('change_type')))}</td>"
+            f'<td class="mono">{e.get("confidence", 0):.2f}</td>'
+            f'<td><a class="btn btn-secondary" href="/review/{eid}" style="padding:6px 14px;font-size:12.5px">Review →</a></td></tr>'
+        )
+    if kind == "learned_pattern":
+        return (
+            f'<tr><td><span class="badge sev-low">Learned pattern</span></td>'
+            f"<td>WCAG {html.escape(str(e.get('wcag_criterion', '?')))} — seen {e.get('occurrence_count', 0)} time(s)</td>"
             f'<td class="mono">{e.get("confidence", 0):.2f}</td>'
             f'<td><a class="btn btn-secondary" href="/review/{eid}" style="padding:6px 14px;font-size:12.5px">Review →</a></td></tr>'
         )
@@ -488,6 +497,23 @@ def _render_review_detail(e: dict, message: str | None = None) -> str:
           <div class="field">{html.escape(str(e.get('old_version')))} → {html.escape(str(e.get('new_version')))}</div>
           <div class="field">Classified: {html.escape(str(e.get('change_type')))} (confidence {e.get('confidence', 0):.2f})</div>
           <div class="field">{html.escape(str(e.get('reasoning', '')))}</div>
+        """
+    elif e.get("kind") == "learned_pattern":
+        samples = "".join(
+            f'<div class="fix-cell" style="max-width:none;margin-bottom:6px">{html.escape(str(r))}</div>'
+            for r in e.get("sample_rationales", [])
+        )
+        body = f"""
+          <div class="field"><b>Learned dismissal pattern</b> <span class="badge sev-low">Learned pattern</span></div>
+          <div class="field"><b>WCAG criterion:</b> {html.escape(str(e.get('wcag_criterion', '')))}</div>
+          <div class="field"><b>Seen:</b> {e.get('occurrence_count', 0)} time(s) across independent scans</div>
+          <div class="field"><b>Confidence:</b> <span class="mono">{e.get('confidence', 0):.2f}</span></div>
+          <div class="field"><b>Pattern:</b> {html.escape(str(e.get('pattern_description', '')))}</div>
+          <div class="field"><b>Sample dismissal rationales:</b></div>
+          {samples}
+          <div class="field" style="margin-top:10px;color:var(--muted);font-size:12.5px">
+            Confirming adds this to Editor's grounding on every future scan. Dismissing discards it -- the miner won't re-propose this exact pattern.
+          </div>
         """
     else:
         sev = str(e.get("severity", "medium")).lower()
@@ -572,8 +598,11 @@ async def review_resolve(escalation_id: str, request: Request, disposition: str 
     if escalation.get("status") == "resolved":
         return HTMLResponse(_render_review_detail(escalation, message="Already resolved."))
 
-    if escalation.get("kind") == "kb_version_change":
+    kind = escalation.get("kind")
+    if kind == "kb_version_change":
         resolve_kb_escalation(escalation_id, disposition=disposition, reviewer="web-review")
+    elif kind == "learned_pattern":
+        resolve_pattern_escalation(escalation_id, disposition=disposition, reviewer="web-review")
     else:
         resolve_finding_escalation(_issue_sink(), escalation_id, disposition=disposition, reviewer="web-review")
 
