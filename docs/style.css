@@ -62,9 +62,46 @@ main {
   border-radius: 6px;
   padding: 20px;
   margin-bottom: 20px;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
 }
-.service-card h3 {
+.service-card img {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+.service-card .service-body h3 {
   margin-top: 0;
+}
+.trust-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin: 32px 0 40px;
+  padding: 28px 0;
+  border-top: 1px solid #e6e6e6;
+  border-bottom: 1px solid #e6e6e6;
+}
+.trust-item {
+  flex: 1;
+  min-width: 160px;
+  text-align: center;
+}
+.trust-item img {
+  width: 56px;
+  height: 56px;
+  margin-bottom: 10px;
+}
+.trust-item .trust-label {
+  font-weight: bold;
+  font-size: 15px;
+  color: #1b4332;
+}
+.trust-item .trust-sub {
+  font-size: 13px;
+  color: #666666;
+  margin-top: 2px;
 }
 footer {
   background: #f4f4f4;
