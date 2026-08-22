@@ -27,6 +27,7 @@ from pydantic import BaseModel
 from mad_platform.agents.editor import VerifiedFinding
 from mad_platform.tools.adk_client import generate_structured
 from mad_platform.tools.gemini_client import FLASH, FLASH_LITE
+from mad_platform.web import theme
 
 # The report can be opened outside the app's own origin (downloaded, saved
 # locally, reopened later) so the live-status check below needs an
@@ -180,17 +181,6 @@ async def generate_executive_summary(url: str, ranked: list[RankedFinding]) -> s
     return result.summary
 
 
-# Severity -> (accent color, tint background), standard red/orange/amber/blue
-# risk-coding so the reader's eye sorts by severity before reading a word.
-_SEVERITY_STYLE = {
-    "critical": ("#B91C1C", "#FEF2F2"),
-    "high": ("#C2410C", "#FFF7ED"),
-    "medium": ("#A16207", "#FFFBEB"),
-    "low": ("#1D4ED8", "#EFF6FF"),
-}
-_DEFAULT_SEVERITY_STYLE = ("#374151", "#F3F4F6")
-
-
 def _esc(text: str) -> str:
     # Findings text comes from an LLM and has, in practice, contained literal
     # HTML snippets (e.g. a suggested fix quoting `<img alt="...">`) -- escape
@@ -199,45 +189,36 @@ def _esc(text: str) -> str:
     return html_lib.escape(str(text))
 
 
-def _stat_badge(count: int, label: str, color: str) -> str:
-    return (
-        f'<div class="stat" style="border-top:3px solid {color}">'
-        f'<div class="n" style="color:{color}">{count}</div>'
-        f'<div class="l">{_esc(label)}</div></div>'
-    )
-
-
-def _finding_card(index: int, r: RankedFinding, ticket: str | None, escalation_id: str | None = None) -> str:
-    accent, tint = _SEVERITY_STYLE.get(r.severity.lower(), _DEFAULT_SEVERITY_STYLE)
+def _status_badge(ticket: str | None, escalation_id: str | None) -> str:
     if ticket:
-        ticket_html = f'<span class="badge" style="background:#DCFCE7;color:#15803D">Filed: {_esc(ticket)}</span>'
-    elif escalation_id:
+        return f'<span class="badge sev-ok">Filed: {_esc(ticket)}</span>'
+    if escalation_id:
         # Not resolved yet as far as the report knows at generation time --
         # the small script at the end of this page checks the live status
         # on load and updates this badge in place, so a report reopened
         # later reflects what actually happened instead of freezing here.
-        ticket_html = (
-            f'<span class="badge escalation-badge" data-escalation-id="{_esc(escalation_id)}" '
-            f'style="background:#FEF9C3;color:#854D0E">Awaiting internal review</span>'
+        return (
+            f'<span class="badge sev-pending escalation-badge" '
+            f'data-escalation-id="{_esc(escalation_id)}">Awaiting internal review</span>'
         )
-    else:
-        ticket_html = (
-            '<span class="badge" style="background:#FEF9C3;color:#854D0E">Awaiting internal review</span>'
-        )
-    return f"""
-    <div class="finding" style="border-left-color:{accent}">
-      <div class="finding-header">
-        <h3>{index + 1}. WCAG {_esc(r.wcag_criterion)}</h3>
-        <span class="badge" style="background:{tint};color:{accent}">{_esc(r.severity)}</span>
-      </div>
-      <div class="field"><span class="k">Page</span> {_esc(r.page_url)}</div>
-      <div class="field"><span class="k">Risk score</span> {r.risk_score:.0f}/100</div>
-      <div class="field"><span class="k">Why it matters</span> {_esc(r.risk_rationale)}</div>
-      <div class="field"><span class="k">Evidence</span> {_esc(r.editor_rationale)}</div>
-      <div class="field"><span class="k">Suggested fix</span></div>
-      <div class="fix-box">{_esc(r.suggested_fix)}</div>
-      <div class="field" style="margin-top:10px">{ticket_html}</div>
-    </div>"""
+    return '<span class="badge sev-pending">Awaiting internal review</span>'
+
+
+def _finding_row(index: int, r: RankedFinding, ticket: str | None, escalation_id: str | None = None) -> str:
+    sev = r.severity.lower()
+    rail_color = theme.SEVERITY_VAR.get(sev, "var(--muted)")
+    return f"""<tr>
+  <td class="rail"><span style="background:{rail_color}"></span></td>
+  <td class="num mono">{index + 1}</td>
+  <td>
+    <div class="finding-title">WCAG {_esc(r.wcag_criterion)} <span class="badge sev-{sev}" style="margin-left:6px">{_esc(r.severity)}</span></div>
+    <div class="finding-detail">{_esc(r.risk_rationale)}</div>
+  </td>
+  <td>{_esc(r.page_url)}</td>
+  <td class="num mono">{r.risk_score:.0f}</td>
+  <td class="fix-cell">{_esc(r.suggested_fix)}</td>
+  <td>{_status_badge(ticket, escalation_id)}</td>
+</tr>"""
 
 
 _HTML_TEMPLATE = """<!DOCTYPE html>
@@ -246,102 +227,39 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Accessibility Report — {title_url}</title>
-<style>
-  :root {{
-    --bg: #f7f8fa; --surface: #ffffff; --text: #1b1e24;
-    --text-muted: #5b6472; --border: #dde1e8; --brand: #5b54c9;
-  }}
-  * {{ box-sizing: border-box; }}
-  body {{
-    margin: 0; background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.5;
-  }}
-  .page {{ max-width: 820px; margin: 0 auto; padding: 40px 24px 56px; }}
-  header {{
-    border-bottom: 3px solid var(--brand); padding-bottom: 20px; margin-bottom: 28px;
-    display: flex; justify-content: space-between; align-items: center; gap: 20px;
-  }}
-  .brand {{ font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand); font-weight: 700; }}
-  h1 {{ font-size: 26px; margin: 6px 0 4px; word-break: break-word; }}
-  .meta {{ color: var(--text-muted); font-size: 14px; }}
-  .score-badge {{
-    flex-shrink: 0; width: 84px; height: 84px; border-radius: 50%;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    border: 4px solid; font-weight: 700;
-  }}
-  .score-badge .n {{ font-size: 26px; line-height: 1; }}
-  .score-badge .l {{ font-size: 9px; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.8; }}
-  .summary-box {{
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 20px 24px; margin-bottom: 20px;
-  }}
-  .summary-box h2, .findings h2 {{
-    margin-top: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted);
-  }}
-  .summary-box p {{ font-size: 15px; margin-bottom: 0; }}
-  .stat-bar {{ display: flex; gap: 12px; margin: 0 0 28px; flex-wrap: wrap; }}
-  .stat {{
-    flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 14px 18px; text-align: center; min-width: 90px;
-  }}
-  .stat .n {{ font-size: 26px; font-weight: 700; line-height: 1.2; }}
-  .stat .l {{ font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }}
-  .finding {{
-    background: var(--surface); border: 1px solid var(--border); border-left-width: 5px;
-    border-radius: 8px; padding: 18px 22px; margin-bottom: 14px;
-  }}
-  .finding-header {{ display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; }}
-  .badge {{
-    display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px;
-    font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap;
-  }}
-  .finding h3 {{ margin: 0; font-size: 16px; }}
-  .field {{ margin: 8px 0; font-size: 14px; }}
-  .field .k {{ color: var(--text-muted); font-weight: 600; display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 2px; }}
-  .fix-box {{
-    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-    padding: 10px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 13px; white-space: pre-wrap; word-break: break-word;
-  }}
-  .empty {{ background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; text-align: center; color: var(--text-muted); }}
-  footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }}
+{font_link}
+<style>{theme_css}
+.page {{ max-width: 900px; padding: 40px 24px 0; }}
+header {{ display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; margin-bottom: 24px; }}
+header .meta {{ color: var(--muted); font-size: 13.5px; margin-top: 4px; }}
 </style>
 </head>
 <body>
 <div class="page">
   <header>
     <div>
-      <div class="brand">MAD Platform — Accessibility Report</div>
+      <div class="brand"><span class="dot-b"></span>MAD Platform — Accessibility Report</div>
       <h1>{title_url}</h1>
       <div class="meta">Generated {generated_at}</div>
     </div>
-    <div class="score-badge" style="border-color:{score_color};color:{score_color}">
-      <div class="n">{score}</div>
-      <div class="l">Score</div>
-    </div>
+    {score_dial}
   </header>
 
+  {dashboard_row}
+
   <div class="summary-box">
-    <h2>Summary</h2>
+    <div class="lbl">Executive summary</div>
     <p>{exec_summary}</p>
   </div>
 
-  <div class="stat-bar">
-    {stat_badges}
-  </div>
+  {findings_section}
 
-  <div class="findings">
-    <h2>Findings ({count})</h2>
-    {finding_cards}
-  </div>
-
-  <footer>
-    MAD Platform — autonomous, AI-assisted WCAG accessibility scanning with independent
-    verification before anything is reported. Findings are sorted by real-world risk,
-    not raw technical severity alone.
-  </footer>
 </div>
+<footer class="note">
+  MAD Platform — autonomous, AI-assisted WCAG accessibility scanning with independent
+  verification before anything is reported. Findings are sorted by real-world risk,
+  not raw technical severity alone.
+</footer>
 <script>
 // Findings under internal review show "Awaiting internal review" as of
 // when this report was generated. If this page is reopened later, this
@@ -354,14 +272,12 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
       .then(function (r) {{ return r.ok ? r.json() : null; }})
       .then(function (data) {{
         if (!data || !data.resolved) return;
+        el.classList.remove("escalation-badge", "sev-pending");
         if (data.ticket_id) {{
           el.textContent = "Filed: " + data.ticket_id;
-          el.style.background = "#DCFCE7";
-          el.style.color = "#15803D";
+          el.classList.add("sev-ok");
         }} else {{
           el.textContent = "Reviewed — dismissed";
-          el.style.background = "#F3F4F6";
-          el.style.color = "#374151";
         }}
       }})
       .catch(function () {{}});
@@ -394,27 +310,28 @@ async def draft_report(
     counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     for r in ranked:
         counts[r.severity.lower()] = counts.get(r.severity.lower(), 0) + 1
-
-    stat_badges = _stat_badge(len(ranked), "Total findings", "#374151") + "".join(
-        _stat_badge(counts.get(sev, 0), sev.capitalize(), _SEVERITY_STYLE[sev][0]) for sev in ("critical", "high", "medium", "low")
-    )
+    p_counts = theme.principle_counts([r.wcag_criterion for r in ranked])
 
     if not ranked:
-        finding_cards = '<div class="empty">No confirmed findings on the pages checked.</div>'
+        findings_section = '<div class="empty">No confirmed findings on the pages checked.</div>'
     else:
-        finding_cards = "".join(
-            _finding_card(i, r, ticket_by_finding.get(i), escalation_by_finding.get(i))
+        rows = "".join(
+            _finding_row(i, r, ticket_by_finding.get(i), escalation_by_finding.get(i))
             for i, r in enumerate(ranked)
         )
+        findings_section = f"""<table class="findings-table">
+  <thead><tr><th></th><th class="num">#</th><th>Finding</th><th>Page</th><th class="num">Risk</th><th>Suggested fix</th><th>Status</th></tr></thead>
+  <tbody>{rows}</tbody>
+</table>"""
 
     return _HTML_TEMPLATE.format(
         title_url=_esc(url),
         generated_at=_esc(generated_at),
         exec_summary=_esc(exec_summary),
-        score=score,
-        score_color=score_color(score),
-        stat_badges=stat_badges,
-        count=len(ranked),
-        finding_cards=finding_cards,
+        font_link=theme.FONT_LINK,
+        theme_css=theme.THEME_CSS,
+        score_dial=theme.score_dial(score, score_color(score)),
+        dashboard_row=theme.dashboard_row(score, score_color(score), counts, p_counts),
+        findings_section=findings_section,
         app_base_url=_APP_BASE_URL,
     )
