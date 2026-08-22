@@ -169,26 +169,32 @@ python run_scan.py https://example.com
 uvicorn mad_platform.web.app:app --port 8080
 ```
 
-See [`SETUP.md`](SETUP.md) for the full GCP provisioning guide and
-[`gcp-deploy.sh`](gcp-deploy.sh) for the infrastructure-as-code used to
-deploy this project's Cloud Run services, Firestore database, Pub/Sub
-topics, and service accounts.
+See [`SETUP.md`](SETUP.md) for the full GCP provisioning guide.
+[`gcp-deploy.sh`](gcp-deploy.sh) covers the core services, Firestore
+database, Pub/Sub topics, and service accounts; `SETUP.md` has the exact
+commands for the one piece it doesn't cover, the Gemma pattern-miner
+Cloud Run Job.
 
 ## Project structure
 
 ```
 mad_platform/
-  agents/        # Orchestrator, Analyst, Editor, Reporter, Action Agent, WCAG auto-heal
-  tools/         # Crawler, rule checks, AI checks, Gemini client, RAG, WCAG version fetch
+  agents/        # Orchestrator, Analyst, Editor, Reporter, Action Agent,
+                  # WCAG auto-heal, Pattern Miner (Gemma persistent memory)
+  tools/         # Crawler, rule checks, AI checks, ADK client, Gemma
+                  # client, RAG, WCAG version fetch, issue sink, Slack notify
   state/         # Firestore + Cloud Storage clients
-  web/           # The scan-submission UI and the WCAG-poller HTTP entrypoint
+  web/           # Scan-submission UI, status page, SME review queue,
+                  # the WCAG-poller HTTP entrypoint, shared theme/charts
   data/          # Curated WCAG success-criteria corpus
-docs/            # Demo site (GitHub Pages)
-run_scan.py               # CLI entry point for a one-time scan
-review_escalations.py     # SME review queue CLI
-check_wcag_version.py     # Manual trigger for the WCAG freshness check
-SETUP.md                  # GCP provisioning guide
-gcp-deploy.sh / gcp-cleanup.sh   # Infrastructure-as-code
+docs/            # Demo site + self-hosted architecture diagram (GitHub Pages)
+run_scan.py                    # CLI entry point for a one-time scan
+review_escalations.py          # SME review queue CLI (web UI is the primary surface)
+check_wcag_version.py          # Manual trigger for the WCAG freshness check
+mine_patterns.py               # Manual trigger for the Gemma pattern miner
+Dockerfile / Dockerfile.wcag_poller / Dockerfile.pattern_miner
+SETUP.md                       # GCP provisioning guide
+gcp-deploy.sh / gcp-cleanup.sh # Infrastructure-as-code (core services)
 ```
 
 ## Built during the hackathon submission window
