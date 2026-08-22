@@ -103,6 +103,21 @@ main {
   color: #666666;
   margin-top: 2px;
 }
+.photo-section {
+  margin: 8px 0 40px;
+}
+.photo-section img {
+  width: 100%;
+  height: 280px;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+}
+.photo-caption {
+  font-size: 13px;
+  color: #888888;
+  margin-top: 8px;
+}
 footer {
   background: #f4f4f4;
   padding: 24px 32px;
