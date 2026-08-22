@@ -96,12 +96,13 @@ When it's done, you get a score, a severity breakdown, and the full report:
   finding's WCAG reference is grounded in the actual standard rather than
   an LLM's unverified recollection — and the auto-heal loop keeps that
   reference material from going stale.
-- **Let the system learn from its own history.** A locally-run Gemma model
-  periodically mines Editor's real dismissal history for recurring,
-  consistent false-positive patterns — a background batch job, exactly the
-  workload Gemma's on-device design targets, distinct from the real-time
-  Gemini calls everywhere else. A person confirms each mined pattern
-  through the same review queue used for everything else; only confirmed
+- **Let the system learn from its own history.** A self-hosted Gemma model
+  (Ollama, baked into its own Cloud Run Job, triggered weekly by Cloud
+  Scheduler) periodically mines Editor's real dismissal history for
+  recurring, consistent false-positive patterns — a background batch job,
+  exactly the workload Gemma's on-device design targets, distinct from the
+  real-time Gemini calls everywhere else. A person confirms each mined
+  pattern through the same review queue used for everything else; only confirmed
   patterns become persistent memory that grounds Editor on every future
   scan.
 
@@ -124,16 +125,18 @@ it first.
 
 - **AI:** Gemini via Vertex AI (`gemini-3.5-flash-lite` for high-volume
   calls, `gemini-3.7-flash` for judgment calls) for every real-time,
-  user-facing call; a locally-run Gemma (`gemma3:4b` via Ollama) for the
-  one background batch job (dismissal-pattern mining) that has no
-  live-latency pressure
+  user-facing call; a self-hosted Gemma (`gemma3:4b` via Ollama, its own
+  Cloud Run Job) for the one background batch job (dismissal-pattern
+  mining) that has no live-latency pressure
 - **Agent framework:** Google Agent Development Kit (ADK)
-- **Compute:** Cloud Run (scale-to-zero), four services split by trigger
-  type and resource profile
+- **Compute:** Cloud Run — four scale-to-zero services split by trigger
+  type and resource profile, plus one Cloud Run Job for the Gemma batch
+  miner
 - **State:** Firestore — job checkpoints, findings, escalation queue,
-  WCAG knowledge-base embeddings
+  WCAG knowledge-base embeddings, confirmed learned patterns
 - **Storage:** Cloud Storage — generated reports
 - **Scheduling:** Cloud Scheduler — drives the WCAG freshness check
+  (every 6h) and the dismissal-pattern miner (weekly)
 - **Browser automation:** Playwright — headless rendering, screenshots,
   computed-style extraction for real contrast-ratio checking
 - **Web:** FastAPI — the scan-submission UI and status API
