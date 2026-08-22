@@ -1,7 +1,7 @@
 # MAD Platform
 
 **An autonomous agent that scans a website for accessibility problems,
-verifies its own findings, and takes real action on what's confirmed — not
+verifies its own findings, and takes real action on what's confirmed, not
 just a report.**
 
 Built for the [All Things Agentic Hackathon](https://allthingsagentichackathon.devpost.com/)
@@ -11,16 +11,16 @@ on Gemini, Google's Agent Development Kit (ADK), and Google Cloud.
 
 ## Try it live
 
-**[scan-onboarding-803013053073.us-central1.run.app](https://scan-onboarding-803013053073.us-central1.run.app)**
-— paste in a URL and watch it scan. Access is gated by a code (a
-deliberate security measure — see *Tech stack* below).
+**[scan-onboarding-803013053073.us-central1.run.app](https://scan-onboarding-803013053073.us-central1.run.app):**
+paste in a URL and watch it scan. Access is gated by a code (a
+deliberate security measure, see *Tech stack* below).
 
-**[Guardian Pest Control](https://pandayv.github.io/mad-platform/)** — a
+**[Guardian Pest Control](https://pandayv.github.io/mad-platform/):** a
 small fictional business site, seeded with real accessibility violations,
 built to give the scanner a consistent, reliable target ([`docs/`](docs/)).
 
-**[Architecture diagram](https://pandayv.github.io/mad-platform/architecture.html)**
-— the full pipeline, the WCAG auto-heal loop, and the Google Cloud
+**[Architecture diagram](https://pandayv.github.io/mad-platform/architecture.html):**
+the full pipeline, the WCAG auto-heal loop, and the Google Cloud
 infrastructure behind it.
 
 ## The problem
@@ -28,13 +28,13 @@ infrastructure behind it.
 Website-accessibility lawsuits (ADA-related, in the US) are a real and
 growing risk for small businesses, most of whom have no practical way to
 know they're exposed. Manual accessibility audits are expensive and slow.
-Automated scanners exist, but they're noisy — full of false positives a
-non-technical business owner can't triage — and a report alone doesn't fix
+Automated scanners exist, but they're noisy (full of false positives a
+non-technical business owner can't triage), and a report alone doesn't fix
 anything; someone still has to turn it into work that gets done.
 
 MAD Platform removes that blind spot: point it at a URL, and it finds real
 issues, checks its own work before trusting it, explains what matters most
-in plain language, and files the confirmed ones as tickets automatically —
+in plain language, and files the confirmed ones as tickets automatically,
 while routing the genuinely uncertain ones to a human instead of guessing.
 
 ## Guiding principles
@@ -86,27 +86,27 @@ what's actually running, not just stated intent.
 
 ## What it does
 
-1. **Scans a site autonomously** — decides which pages matter most on its
+1. **Scans a site autonomously.** Decides which pages matter most on its
    own (home, contact, forms), then checks them with both deterministic
    rule checks (contrast, missing alt text, heading structure, form
    labels, ARIA misuse, tab order) and AI-assisted review for what rules
    can't judge, like whether alt text is actually descriptive.
-2. **Verifies its own findings** — every flag is independently
+2. **Verifies its own findings.** Every flag is independently
    double-checked before it's trusted; false positives get dismissed with
    a documented reason, real findings get a confidence score.
-3. **Ranks by real-world risk** — not raw technical severity: WCAG
+3. **Ranks by real-world risk**, not raw technical severity: WCAG
    conformance level, how often that violation type shows up in real
    accessibility litigation, and estimated user impact.
-4. **Produces an actionable report** — a styled, self-contained HTML
+4. **Produces an actionable report:** a styled, self-contained HTML
    report with an overall score, severity breakdown, plain-English
    executive summary, and a concrete suggested fix per finding.
-5. **Takes real action** — files a ticket automatically for every
+5. **Takes real action.** Files a ticket automatically for every
    confirmed finding; routes the low-confidence or critical minority to a
    human reviewer instead, who can confirm or dismiss.
-6. **Recovers from failure** — a scan interrupted mid-way (crash, redeploy)
+6. **Recovers from failure.** A scan interrupted mid-way (crash, redeploy)
    resumes from its last completed checkpoint rather than starting over or
    silently duplicating work.
-7. **Keeps its own reference material current** — periodically checks
+7. **Keeps its own reference material current.** Periodically checks
    whether the WCAG standard itself has changed, auto-refreshing for minor
    additive updates and routing structural changes to human review before
    acting on them.
@@ -124,7 +124,7 @@ When it's done, you get a score, a severity breakdown, and the full report:
 ## Product layer vs. platform layer
 
 - **Product layer (built):** a place to come check your website's
-  accessibility and get an actionable report — one-time, on-demand, no
+  accessibility and get an actionable report: one-time, on-demand, no
   registration required. Everything above is this layer.
 - **Platform layer (on the roadmap):** registering a site for *ongoing*
   monitoring, detecting when a registered site's code changes, and the
@@ -138,20 +138,20 @@ When it's done, you get a score, a severity breakdown, and the full report:
   Cloud Run Job) for the one background batch job (dismissal-pattern
   mining) that has no live-latency pressure
 - **Agent framework:** Google Agent Development Kit (ADK)
-- **Compute:** Cloud Run — four scale-to-zero services split by trigger
+- **Compute:** Cloud Run, four scale-to-zero services split by trigger
   type and resource profile, plus one Cloud Run Job for the Gemma batch
   miner
-- **State:** Firestore — job checkpoints, findings, escalation queue,
-  WCAG knowledge-base embeddings, confirmed learned patterns
-- **Storage:** Cloud Storage — generated reports
-- **Scheduling:** Cloud Scheduler — drives the WCAG freshness check
+- **State:** Firestore, for job checkpoints, findings, escalation queue,
+  WCAG knowledge-base embeddings, and confirmed learned patterns
+- **Storage:** Cloud Storage, for generated reports
+- **Scheduling:** Cloud Scheduler, driving the WCAG freshness check
   (every 6h) and the dismissal-pattern miner (weekly)
-- **Browser automation:** Playwright — headless rendering, screenshots,
-  computed-style extraction for real contrast-ratio checking
-- **Web:** FastAPI — the scan-submission UI and status API
+- **Browser automation:** Playwright, for headless rendering, screenshots,
+  and computed-style extraction for real contrast-ratio checking
+- **Web:** FastAPI, powering the scan-submission UI and status API
 - **Ticketing:** Jira REST API, behind an abstraction (`IssueSink`) so a
   second tracker could be added without touching Orchestrator or Reporter
-- **Notifications:** Slack, via an incoming webhook — a real-time alert
+- **Notifications:** Slack, via an incoming webhook: a real-time alert
   when a finding or a WCAG version change is escalated to a human, a
   summary posted when a scan completes
 - **Security:** the public scan endpoint requires an access code (Secret

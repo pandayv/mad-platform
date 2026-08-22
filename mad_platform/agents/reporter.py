@@ -226,7 +226,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Accessibility Report — {title_url}</title>
+<title>Accessibility Report | {title_url}</title>
 {font_link}
 <style>{theme_css}
 .page {{ max-width: 900px; padding: 40px 24px 0; }}
@@ -238,7 +238,7 @@ header .meta {{ color: var(--muted); font-size: 13.5px; margin-top: 4px; }}
 <div class="page">
   <header>
     <div>
-      <div class="brand"><span class="dot-b"></span>MAD Platform — Accessibility Report</div>
+      <div class="brand"><span class="dot-b"></span>MAD Platform · Accessibility Report</div>
       <h1>{title_url}</h1>
       <div class="meta">Generated {generated_at}</div>
     </div>
@@ -256,7 +256,7 @@ header .meta {{ color: var(--muted); font-size: 13.5px; margin-top: 4px; }}
 
 </div>
 <footer class="note">
-  MAD Platform — autonomous, AI-assisted WCAG accessibility scanning with independent
+  MAD Platform is autonomous, AI-assisted WCAG accessibility scanning with independent
   verification before anything is reported. Findings are sorted by real-world risk,
   not raw technical severity alone.
 </footer>
@@ -277,7 +277,7 @@ header .meta {{ color: var(--muted); font-size: 13.5px; margin-top: 4px; }}
           el.textContent = "Filed: " + data.ticket_id;
           el.classList.add("sev-ok");
         }} else {{
-          el.textContent = "Reviewed — dismissed";
+          el.textContent = "Reviewed: dismissed";
         }}
       }})
       .catch(function () {{}});

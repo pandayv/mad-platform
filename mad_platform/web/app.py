@@ -86,7 +86,7 @@ def _render_form(error: str | None = None) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MAD Platform — Accessibility Scan</title>
+<title>MAD Platform | Accessibility Scan</title>
 {theme.FONT_LINK}
 <style>{_BASE_STYLE}</style>
 </head>
@@ -115,7 +115,7 @@ _STATUS_PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Scanning — MAD Platform</title>
+<title>Scanning | MAD Platform</title>
 __FONT_LINK__
 <style>__STYLE__</style>
 </head>
@@ -409,7 +409,7 @@ def _render_review_login(error: str | None = None) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Internal Review — MAD Platform</title>
+<title>Internal Review | MAD Platform</title>
 {theme.FONT_LINK}
 <style>{_BASE_STYLE}</style>
 </head>
@@ -417,7 +417,7 @@ def _render_review_login(error: str | None = None) -> str:
 <div class="page">
   <div class="brand"><span class="dot-b"></span>MAD Platform</div>
   <h1>Internal review queue</h1>
-  <div class="tagline">Not for customer access — authorized reviewers only.</div>
+  <div class="tagline">Not for customer access. Authorized reviewers only.</div>
   <div class="card">
     <form action="/review/login" method="post">
       <label class="f-label" for="rcode">Review code</label>
@@ -437,22 +437,22 @@ def _review_item_row(e: dict) -> str:
     if kind == "kb_version_change":
         return (
             f'<tr><td><span class="badge sev-low">KB version</span></td>'
-            f"<td>WCAG {html.escape(str(e.get('old_version')))} → {html.escape(str(e.get('new_version')))} "
-            f"— classified {html.escape(str(e.get('change_type')))}</td>"
+            f"<td>WCAG {html.escape(str(e.get('old_version')))} → {html.escape(str(e.get('new_version')))}, "
+            f"classified {html.escape(str(e.get('change_type')))}</td>"
             f'<td class="mono">{e.get("confidence", 0):.2f}</td>'
             f'<td><a class="btn btn-secondary" href="/review/{eid}" style="padding:6px 14px;font-size:12.5px">Review →</a></td></tr>'
         )
     if kind == "learned_pattern":
         return (
             f'<tr><td><span class="badge sev-low">Learned pattern</span></td>'
-            f"<td>WCAG {html.escape(str(e.get('wcag_criterion', '?')))} — seen {e.get('occurrence_count', 0)} time(s)</td>"
+            f"<td>WCAG {html.escape(str(e.get('wcag_criterion', '?')))}, seen {e.get('occurrence_count', 0)} time(s)</td>"
             f'<td class="mono">{e.get("confidence", 0):.2f}</td>'
             f'<td><a class="btn btn-secondary" href="/review/{eid}" style="padding:6px 14px;font-size:12.5px">Review →</a></td></tr>'
         )
     sev = str(e.get("severity", "medium")).lower()
     return (
         f'<tr><td><span class="badge sev-{sev}">Finding</span></td>'
-        f"<td>WCAG {html.escape(str(e.get('wcag_criterion', '?')))} — {html.escape(str(e.get('page_url', '')))}</td>"
+        f"<td>WCAG {html.escape(str(e.get('wcag_criterion', '?')))} &middot; {html.escape(str(e.get('page_url', '')))}</td>"
         f'<td class="mono">{e.get("editor_confidence", 0):.2f}</td>'
         f'<td><a class="btn btn-secondary" href="/review/{eid}" style="padding:6px 14px;font-size:12.5px">Review →</a></td></tr>'
     )
@@ -460,7 +460,7 @@ def _review_item_row(e: dict) -> str:
 
 def _render_review_list(pending: list[dict]) -> str:
     if not pending:
-        items_html = '<div class="tagline" style="margin:0">Nothing pending — the queue is empty.</div>'
+        items_html = '<div class="tagline" style="margin:0">Nothing pending. The queue is empty.</div>'
     else:
         rows = "".join(_review_item_row(e) for e in pending)
         items_html = (
@@ -472,7 +472,7 @@ def _render_review_list(pending: list[dict]) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Internal Review — MAD Platform</title>
+<title>Internal Review | MAD Platform</title>
 {theme.FONT_LINK}
 <style>{_BASE_STYLE}</style>
 </head>
@@ -544,13 +544,13 @@ def _render_review_detail(e: dict, message: str | None = None) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Internal Review — MAD Platform</title>
+<title>Internal Review | MAD Platform</title>
 {theme.FONT_LINK}
 <style>{_BASE_STYLE}</style>
 </head>
 <body>
 <div class="page">
-  <div class="brand"><a href="/review" style="color:inherit;text-decoration:none"><span class="dot-b"></span>MAD Platform — Review Queue</a></div>
+  <div class="brand"><a href="/review" style="color:inherit;text-decoration:none"><span class="dot-b"></span>MAD Platform · Review Queue</a></div>
   <h1>Review item</h1>
   <div class="card">
     {body}

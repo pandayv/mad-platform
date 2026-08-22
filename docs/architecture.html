@@ -324,12 +324,12 @@ footer a:hover { text-decoration: underline; }
 <header>
   <div class="eyebrow">System Architecture</div>
   <h1>MAD Platform</h1>
-  <div class="subtitle">Autonomous WCAG accessibility scanning — an agent that finds real issues, verifies its own findings, and takes action on what's confirmed. Built on Gemini, Google's Agent Development Kit, and Google Cloud.</div>
+  <div class="subtitle">Autonomous WCAG accessibility scanning: an agent that finds real issues, verifies its own findings, and takes action on what's confirmed. Built on Gemini, Google's Agent Development Kit, and Google Cloud.</div>
 </header>
 
 <div class="legend">
-  <div class="legend-item"><span class="legend-dot" style="background:var(--accent-agent)"></span>Agent — LLM judgment</div>
-  <div class="legend-item"><span class="legend-dot" style="background:var(--accent-tool)"></span>Tool — deterministic code</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--accent-agent)"></span>Agent: LLM judgment</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--accent-tool)"></span>Tool: deterministic code</div>
   <div class="legend-item"><span class="legend-dot" style="background:var(--accent-human)"></span>Human approval</div>
   <div class="legend-item"><span class="legend-dot" style="background:var(--accent-infra)"></span>Google Cloud infrastructure</div>
 </div>
@@ -338,7 +338,7 @@ footer a:hover { text-decoration: underline; }
   <div class="zone-label">Entry point</div>
   <div class="trigger-row">
     <div class="trigger active">
-      <div class="label">Web app — scan a site on demand</div>
+      <div class="label">Web app: scan a site on demand</div>
       <div class="desc">A URL submitted through the live front end kicks off a Review Cycle directly.</div>
       <span class="tag live">Live</span>
     </div>
@@ -355,11 +355,11 @@ footer a:hover { text-decoration: underline; }
       <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
       <div class="step-card agent">
         <div class="step-head">
-          <span class="step-title">Orchestrator — select pages</span>
+          <span class="step-title">Orchestrator: select pages</span>
           <span class="step-kind agent">agent</span>
         </div>
-        <div class="step-desc">Fetches the entry page, reads nav links, decides which pages carry real risk (forms, checkout, account flows) — a bounded, justified subset, not exhaustive crawling.</div>
-        <div class="lens-tags"><span class="lens-tag">orchestration — dynamic delegation</span></div>
+        <div class="step-desc">Fetches the entry page, reads nav links, decides which pages carry real risk (forms, checkout, account flows): a bounded, justified subset, not exhaustive crawling.</div>
+        <div class="lens-tags"><span class="lens-tag">orchestration: dynamic delegation</span></div>
       </div>
     </div>
 
@@ -367,16 +367,16 @@ footer a:hover { text-decoration: underline; }
       <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
       <div class="step-card tool">
         <div class="step-head">
-          <span class="step-title">Analyst — parallel per-page checks</span>
+          <span class="step-title">Analyst: parallel per-page checks</span>
           <span class="step-kind tool">tool + agent</span>
         </div>
-        <div class="step-desc">Independent checks with no ordering dependency, run concurrently. Tuned high-recall — over-flagging is acceptable, missing a real violation is not.</div>
+        <div class="step-desc">Independent checks with no ordering dependency, run concurrently. Tuned high-recall: over-flagging is acceptable, missing a real violation is not.</div>
         <div class="branch-group">
           <div class="branch-item"><b>Rule checks</b>contrast, alt text, headings, labels, ARIA, tab order</div>
-          <div class="branch-item"><b>Visual AI</b>screenshot review — focus indicators, visual contrast</div>
+          <div class="branch-item"><b>Visual AI</b>screenshot review: focus indicators, visual contrast</div>
           <div class="branch-item"><b>Semantic AI</b>grounded in the WCAG knowledge base below</div>
         </div>
-        <div class="lens-tags"><span class="lens-tag">orchestration — parallel fan-out</span></div>
+        <div class="lens-tags"><span class="lens-tag">orchestration: parallel fan-out</span></div>
       </div>
     </div>
 
@@ -384,7 +384,7 @@ footer a:hover { text-decoration: underline; }
       <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
       <div class="step-card agent">
         <div class="step-head">
-          <span class="step-title">Editor — independent verification</span>
+          <span class="step-title">Editor: independent verification</span>
           <span class="step-kind agent">agent</span>
         </div>
         <div class="step-desc">Re-checks every flag against the underlying evidence. Dismisses false positives with a documented reason; assigns a validated confidence score to what survives.</div>
@@ -395,11 +395,11 @@ footer a:hover { text-decoration: underline; }
       <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
       <div class="step-card agent">
         <div class="step-head">
-          <span class="step-title">Orchestrator — retry gate</span>
+          <span class="step-title">Orchestrator: retry gate</span>
           <span class="step-kind agent">agent</span>
         </div>
-        <div class="step-desc">"Good enough, or one more pass?" Capped at exactly one retry — a bounded loop, not open-ended.</div>
-        <div class="lens-tags"><span class="lens-tag">feedback loop — bounded</span></div>
+        <div class="step-desc">"Good enough, or one more pass?" Capped at exactly one retry: a bounded loop, not open-ended.</div>
+        <div class="lens-tags"><span class="lens-tag">feedback loop: bounded</span></div>
       </div>
     </div>
 
@@ -407,10 +407,10 @@ footer a:hover { text-decoration: underline; }
       <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
       <div class="step-card agent">
         <div class="step-head">
-          <span class="step-title">Reporter — rank and draft</span>
+          <span class="step-title">Reporter: rank and draft</span>
           <span class="step-kind agent">agent</span>
         </div>
-        <div class="step-desc">Ranks confirmed findings by real-world risk — WCAG level, litigation pattern frequency, user impact — and drafts the styled report against one fixed template.</div>
+        <div class="step-desc">Ranks confirmed findings by real-world risk (WCAG level, litigation pattern frequency, user impact) and drafts the styled report against one fixed template.</div>
       </div>
     </div>
 
@@ -418,14 +418,14 @@ footer a:hover { text-decoration: underline; }
       <div class="step-connector"><div class="dot"></div></div>
       <div class="step-card">
         <div class="step-head">
-          <span class="step-title">Orchestrator — route and act</span>
+          <span class="step-title">Orchestrator: route and act</span>
         </div>
         <div class="step-desc">One escalation gate: low confidence or critical severity routes to a human; everything else is fully autonomous.</div>
         <div class="route-split">
-          <div class="branch-item" style="background:var(--accent-tool-tint)"><b>Action Agent</b>Files a real Jira ticket automatically. Idempotent — a retried step never double-files.<div class="lens-tags"><span class="lens-tag">idempotency</span></div></div>
+          <div class="branch-item" style="background:var(--accent-tool-tint)"><b>Action Agent</b>Files a real Jira ticket automatically. Idempotent: a retried step never double-files.<div class="lens-tags"><span class="lens-tag">idempotency</span></div></div>
           <div class="branch-item" style="background:var(--accent-human-tint)"><b>SME review queue</b>Confirm → files the ticket, live-updates the report the customer already has open. Dismiss → never becomes a ticket.<div class="lens-tags"><span class="lens-tag">human approval</span></div></div>
         </div>
-        <div class="step-desc" style="margin-top:10px">Both paths post to <b>Slack</b> — a real-time alert when something's escalated, a summary when the scan completes.</div>
+        <div class="step-desc" style="margin-top:10px">Both paths post to <b>Slack</b>: a real-time alert when something's escalated, a summary when the scan completes.</div>
       </div>
     </div>
 
@@ -433,7 +433,7 @@ footer a:hover { text-decoration: underline; }
 </div>
 
 <div class="zone">
-  <div class="zone-label">Memory — WCAG knowledge base</div>
+  <div class="zone-label">Memory: WCAG knowledge base</div>
   <div class="zone-note">Grounds Analyst and Editor's citations against the real standard instead of the model's unaided claim, and stays current on its own.</div>
   <div class="loop-diagram">
     <div class="loop-node mono">Cloud Scheduler tick</div>
@@ -444,30 +444,30 @@ footer a:hover { text-decoration: underline; }
     <div class="loop-arrow">→</div>
     <div class="loop-node mono">Auto-refresh <span style="color:var(--ink-muted)">or</span> escalate to SME</div>
   </div>
-  <div class="lens-tags" style="margin-top:14px"><span class="lens-tag">memory / vector search</span><span class="lens-tag">feedback loop — self-heal</span><span class="lens-tag">human approval on structural change</span></div>
+  <div class="lens-tags" style="margin-top:14px"><span class="lens-tag">memory / vector search</span><span class="lens-tag">feedback loop: self-heal</span><span class="lens-tag">human approval on structural change</span></div>
 </div>
 
 <div class="zone">
-  <div class="zone-label">Memory — Analyst/Editor's own judgment</div>
-  <div class="zone-note">Distinct from the knowledge base above: that loop keeps reference material current, this one tunes the pipeline's own behavior from its real history. A self-hosted Gemma, not Vertex AI — a background batch job with no live-request latency, exactly the workload Gemma's on-device design targets.</div>
+  <div class="zone-label">Memory: Analyst/Editor's own judgment</div>
+  <div class="zone-note">Distinct from the knowledge base above: that loop keeps reference material current, this one tunes the pipeline's own behavior from its real history. A self-hosted Gemma, not Vertex AI: a background batch job with no live-request latency, exactly the workload Gemma's on-device design targets.</div>
   <div class="loop-diagram">
     <div class="loop-node mono">Editor's dismissal history</div>
     <div class="loop-arrow">→</div>
     <div class="loop-node mono">Weekly Scheduler tick</div>
     <div class="loop-arrow">→</div>
-    <div class="loop-node mono">Cloud Run Job — self-hosted Gemma</div>
+    <div class="loop-node mono">Cloud Run Job: self-hosted Gemma</div>
     <div class="loop-arrow">→</div>
     <div class="loop-node decision mono">Consistent pattern?</div>
     <div class="loop-arrow">→</div>
     <div class="loop-node mono">SME review queue</div>
   </div>
   <div class="step-desc" style="margin-top:10px">Confirmed → grounds Editor's prompt on every future scan.</div>
-  <div class="lens-tags" style="margin-top:14px"><span class="lens-tag">persistent memory</span><span class="lens-tag">feedback loop — self-improving</span><span class="lens-tag">human approval before judgment changes</span><span class="lens-tag">Gemma — self-hosted</span></div>
+  <div class="lens-tags" style="margin-top:14px"><span class="lens-tag">persistent memory</span><span class="lens-tag">feedback loop: self-improving</span><span class="lens-tag">human approval before judgment changes</span><span class="lens-tag">Gemma, self-hosted</span></div>
 </div>
 
 <div class="zone">
   <div class="zone-label">Resumability</div>
-  <div class="zone-note">Every stage above checkpoints its completion to Firestore as it finishes. A restart — crash, redeploy — reads the last completed checkpoint and resumes from the next incomplete stage. It never blindly restarts from the top, and never assumes a stage completed just because the job record exists.</div>
+  <div class="zone-note">Every stage above checkpoints its completion to Firestore as it finishes. A restart, whether a crash or a redeploy, reads the last completed checkpoint and resumes from the next incomplete stage. It never blindly restarts from the top, and never assumes a stage completed just because the job record exists.</div>
   <div class="lens-tags"><span class="lens-tag">resumability</span><span class="lens-tag">crash-safe by design</span></div>
 </div>
 
@@ -477,19 +477,19 @@ footer a:hover { text-decoration: underline; }
     <div class="infra-item"><div class="name">Cloud Run</div><div class="role">4 scale-to-zero services + 1 Job, least-privilege per service</div></div>
     <div class="infra-item"><div class="name">Google ADK</div><div class="role">LlmAgent + Runner wraps every real-time Gemini call</div></div>
     <div class="infra-item"><div class="name">Vertex AI · Gemini</div><div class="role">Flash-lite for volume, Flash for judgment calls</div></div>
-    <div class="infra-item"><div class="name">Ollama · Gemma</div><div class="role">Self-hosted on the pattern-miner Job — the one background call, not real-time</div></div>
+    <div class="infra-item"><div class="name">Ollama · Gemma</div><div class="role">Self-hosted on the pattern-miner Job, the one background call, not real-time</div></div>
     <div class="infra-item"><div class="name">Firestore</div><div class="role">Job checkpoints, findings, escalations, KB version, learned patterns</div></div>
     <div class="infra-item"><div class="name">Cloud Storage</div><div class="role">Generated HTML reports</div></div>
     <div class="infra-item"><div class="name">Cloud Scheduler</div><div class="role">WCAG freshness tick (6h), Gemma pattern-miner (weekly)</div></div>
     <div class="infra-item"><div class="name">Secret Manager</div><div class="role">Access codes, Jira + Slack credentials</div></div>
-    <div class="infra-item"><div class="name">Jira Cloud</div><div class="role">Real ticket filing — not a mock sink in production</div></div>
+    <div class="infra-item"><div class="name">Jira Cloud</div><div class="role">Real ticket filing, not a mock sink in production</div></div>
     <div class="infra-item"><div class="name">Slack</div><div class="role">Real-time escalation alerts, scan-complete summaries</div></div>
     <div class="infra-item"><div class="name">Playwright</div><div class="role">Headless render, screenshot, computed styles</div></div>
   </div>
 </div>
 
 <footer>
-  <span>MAD Platform — All Things Agentic Hackathon</span>
+  <span>MAD Platform · All Things Agentic Hackathon</span>
   <a href="https://github.com/pandayv/mad-platform" target="_blank" rel="noopener">github.com/pandayv/mad-platform</a>
 </footer>
 
