@@ -12,11 +12,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 
 from mad_platform.agents.wcag_auto_heal import run_wcag_freshness_check
 
 
-def main() -> None:
+async def main() -> None:
     parser = argparse.ArgumentParser(description="Run the WCAG knowledge-base freshness check.")
     parser.add_argument(
         "--simulate",
@@ -25,7 +26,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    result = run_wcag_freshness_check(simulate_current_version=args.simulate)
+    result = await run_wcag_freshness_check(simulate_current_version=args.simulate)
 
     print(f"Action: {result['action']}")
     if result["action"] == "no_change":
@@ -43,4 +44,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

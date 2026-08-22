@@ -55,12 +55,14 @@ def _from_ai(source: str, f: AIFinding) -> RawFinding:
 
 
 async def analyze_page(snapshot: PageSnapshot) -> list[RawFinding]:
-    """Runs rule checks (sync, no API calls) and both AI-assisted checks
-    (async, Gemini) concurrently, then normalizes everything into one list.
+    """Runs rule checks (sync, no API calls -- still dispatched to a thread
+    so it can't block the event loop) and both AI-assisted checks (natively
+    async, ADK-backed Gemini calls) concurrently, then normalizes everything
+    into one list.
     """
     rule_task = asyncio.to_thread(run_all_rule_checks, snapshot)
-    visual_task = asyncio.to_thread(run_visual_check, snapshot)
-    semantic_task = asyncio.to_thread(run_semantic_check, snapshot)
+    visual_task = run_visual_check(snapshot)
+    semantic_task = run_semantic_check(snapshot)
 
     rule_findings, visual_findings, semantic_findings = await asyncio.gather(
         rule_task, visual_task, semantic_task

@@ -23,8 +23,9 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from mad_platform.agents.analyst import RawFinding
+from mad_platform.tools.adk_client import generate_structured
 from mad_platform.tools.crawler import PageSnapshot
-from mad_platform.tools.gemini_client import FLASH, generate_structured
+from mad_platform.tools.gemini_client import FLASH
 from mad_platform.tools.rag import retrieve_batch as rag_retrieve_batch
 
 
@@ -89,7 +90,7 @@ def _format_findings(findings: list[RawFinding]) -> str:
     return "\n".join(lines)
 
 
-def verify_findings(snapshot: PageSnapshot, findings: list[RawFinding]) -> list[VerifiedFinding]:
+async def verify_findings(snapshot: PageSnapshot, findings: list[RawFinding]) -> list[VerifiedFinding]:
     if not findings:
         return []
 
@@ -98,7 +99,7 @@ def verify_findings(snapshot: PageSnapshot, findings: list[RawFinding]) -> list[
         title=snapshot.title,
         html_excerpt=snapshot.html[:8000],
     )
-    result = generate_structured(
+    result = await generate_structured(
         FLASH, prompt, _VerificationResponse, image_bytes=snapshot.screenshot_png
     )
     return result.verifications

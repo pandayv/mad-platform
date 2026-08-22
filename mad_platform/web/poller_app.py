@@ -19,7 +19,7 @@ app = FastAPI(title="MAD Platform WCAG Poller")
 
 @app.post("/")
 async def tick() -> dict:
-    result = run_wcag_freshness_check()
+    result = await run_wcag_freshness_check()
     logger.info("WCAG freshness check: %s", result)
     return result
 

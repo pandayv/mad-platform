@@ -25,7 +25,8 @@ from datetime import datetime, timezone
 from pydantic import BaseModel
 
 from mad_platform.agents.editor import VerifiedFinding
-from mad_platform.tools.gemini_client import FLASH, FLASH_LITE, generate_structured
+from mad_platform.tools.adk_client import generate_structured
+from mad_platform.tools.gemini_client import FLASH, FLASH_LITE
 
 # The report can be opened outside the app's own origin (downloaded, saved
 # locally, reopened later) so the live-status check below needs an
@@ -116,7 +117,7 @@ def _format_findings(findings: list[tuple[str, VerifiedFinding]]) -> str:
     return "\n".join(lines)
 
 
-def rank_and_recommend(confirmed_by_page: dict[str, list[VerifiedFinding]]) -> list[RankedFinding]:
+async def rank_and_recommend(confirmed_by_page: dict[str, list[VerifiedFinding]]) -> list[RankedFinding]:
     """confirmed_by_page: page URL -> its CONFIRMED VerifiedFinding list
     (dismissed findings don't need a recommendation, so filter before calling).
     Returns findings sorted by risk_score, highest first.
@@ -128,7 +129,7 @@ def rank_and_recommend(confirmed_by_page: dict[str, list[VerifiedFinding]]) -> l
         return []
 
     prompt = _REPORTER_PROMPT.format(findings_list=_format_findings(flat))
-    result = generate_structured(FLASH, prompt, _RecommendationResponse)
+    result = await generate_structured(FLASH, prompt, _RecommendationResponse)
 
     ranked = [
         RankedFinding(
@@ -166,7 +167,7 @@ Findings, highest risk first (severity, WCAG topic, one-line description):
 """
 
 
-def generate_executive_summary(url: str, ranked: list[RankedFinding]) -> str:
+async def generate_executive_summary(url: str, ranked: list[RankedFinding]) -> str:
     if not ranked:
         return (
             "This scan didn't find any confirmed accessibility violations on the "
@@ -175,7 +176,7 @@ def generate_executive_summary(url: str, ranked: list[RankedFinding]) -> str:
         )
     lines = "\n".join(f"- [{r.severity.upper()}] {r.wcag_criterion}: {r.editor_rationale[:100]}" for r in ranked)
     prompt = _EXEC_SUMMARY_PROMPT.format(url=url, summary_lines=lines)
-    result = generate_structured(FLASH_LITE, prompt, _ExecutiveSummary)
+    result = await generate_structured(FLASH_LITE, prompt, _ExecutiveSummary)
     return result.summary
 
 
@@ -372,7 +373,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
-def draft_report(
+async def draft_report(
     url: str,
     ranked: list[RankedFinding],
     ticket_by_finding: dict[int, str | None] | None = None,
@@ -387,7 +388,7 @@ def draft_report(
     ticket_by_finding = ticket_by_finding or {}
     escalation_by_finding = escalation_by_finding or {}
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    exec_summary = generate_executive_summary(url, ranked)
+    exec_summary = await generate_executive_summary(url, ranked)
     score = compute_score(ranked)
 
     counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
