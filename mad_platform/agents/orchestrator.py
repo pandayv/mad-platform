@@ -25,8 +25,9 @@ from mad_platform.agents.editor import VerifiedFinding, verify_findings
 from mad_platform.agents.reporter import RankedFinding, draft_report, rank_and_recommend
 from mad_platform.state import firestore_client as fs
 from mad_platform.state import storage_client
+from mad_platform.tools.adk_client import generate_structured
 from mad_platform.tools.crawler import PageSnapshot, fetch_page
-from mad_platform.tools.gemini_client import FLASH, FLASH_LITE, generate_structured
+from mad_platform.tools.gemini_client import FLASH, FLASH_LITE
 from mad_platform.tools.issue_sink import IssueSink, MockIssueSink
 
 MAX_ADDITIONAL_PAGES = 2
@@ -87,7 +88,7 @@ def _extract_candidate_links(snapshot: PageSnapshot, max_candidates: int = 30) -
     return candidates
 
 
-def select_pages(entry_snapshot: PageSnapshot) -> list[str]:
+async def select_pages(entry_snapshot: PageSnapshot) -> list[str]:
     """Returns absolute URLs: the entry page plus up to MAX_ADDITIONAL_PAGES
     chosen by an LLM call over same-domain links found on it.
     """
@@ -99,7 +100,7 @@ def select_pages(entry_snapshot: PageSnapshot) -> list[str]:
     prompt = _PAGE_SELECTION_PROMPT.format(
         max_pages=MAX_ADDITIONAL_PAGES, entry_url=entry_snapshot.url, candidates=candidate_lines
     )
-    selection = generate_structured(FLASH_LITE, prompt, _PageSelection)
+    selection = await generate_structured(FLASH_LITE, prompt, _PageSelection)
 
     base = urlparse(entry_snapshot.url)
     selected_urls = [entry_snapshot.url]
@@ -146,15 +147,15 @@ def _format_verification_summary(verified: list[VerifiedFinding]) -> str:
     return "\n".join(lines)
 
 
-def evaluate_retry_gate(verified: list[VerifiedFinding]) -> _RetryDecision:
+async def evaluate_retry_gate(verified: list[VerifiedFinding]) -> _RetryDecision:
     prompt = _RETRY_GATE_PROMPT.format(summary=_format_verification_summary(verified))
-    return generate_structured(FLASH, prompt, _RetryDecision)
+    return await generate_structured(FLASH, prompt, _RetryDecision)
 
 
 async def _run_analysis_pass(url: str) -> tuple[PageSnapshot, list[RawFinding], list[VerifiedFinding]]:
     snapshot = await fetch_page(url)
     raw_findings = await analyze_page(snapshot)
-    verified = verify_findings(snapshot, raw_findings)
+    verified = await verify_findings(snapshot, raw_findings)
     return snapshot, raw_findings, verified
 
 
@@ -163,7 +164,7 @@ async def _process_page(job_id: str, url: str) -> list[VerifiedFinding]:
     fs.checkpoint_page_crawled(job_id, url)
     fs.checkpoint_page_analyzed(job_id, url, raw_finding_count=len(raw_findings))
 
-    decision = evaluate_retry_gate(verified)
+    decision = await evaluate_retry_gate(verified)
     retried = False
     if not decision.proceed:
         fs.checkpoint_page_retry(job_id, url, reason=decision.reasoning)
@@ -228,7 +229,7 @@ async def run_one_time_scan(
             entry_snapshot = await fetch_page(url)
             fs.checkpoint_page_crawled(job_id, url)
             fs.set_job_phase(job_id, "selecting_pages")
-            pages = select_pages(entry_snapshot)
+            pages = await select_pages(entry_snapshot)
 
         fs.set_job_phase(job_id, "analyzing_pages")
         results: dict[str, list[VerifiedFinding]] = {}
@@ -244,7 +245,7 @@ async def run_one_time_scan(
         confirmed_by_page = {
             page_url: [f for f in findings if f.confirmed] for page_url, findings in results.items()
         }
-        ranked = rank_and_recommend(confirmed_by_page)
+        ranked = await rank_and_recommend(confirmed_by_page)
 
         fs.set_job_phase(job_id, "filing_tickets")
         filing = route_and_file(issue_sink, ranked)
@@ -263,7 +264,7 @@ async def run_one_time_scan(
             escalation_by_finding[index] = escalation_id
 
         fs.set_job_phase(job_id, "generating_report")
-        report = draft_report(url, ranked, ticket_by_finding, escalation_by_finding)
+        report = await draft_report(url, ranked, ticket_by_finding, escalation_by_finding)
         report_uri = storage_client.save_report(job_id, report)
         fs.complete_job(job_id)
     except Exception as exc:  # noqa: BLE001

@@ -18,8 +18,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from mad_platform.tools.adk_client import generate_structured
 from mad_platform.tools.crawler import PageSnapshot
-from mad_platform.tools.gemini_client import FLASH_LITE, generate_structured
+from mad_platform.tools.gemini_client import FLASH_LITE
 
 
 class AIFinding(BaseModel):
@@ -81,18 +82,18 @@ Relevant HTML excerpt:
 """
 
 
-def run_visual_check(snapshot: PageSnapshot) -> list[AIFinding]:
+async def run_visual_check(snapshot: PageSnapshot) -> list[AIFinding]:
     prompt = _VISUAL_PROMPT.format(title=snapshot.title)
-    result = generate_structured(
+    result = await generate_structured(
         FLASH_LITE, prompt, _AIFindingsResponse, image_bytes=snapshot.screenshot_png
     )
     return result.findings
 
 
-def run_semantic_check(snapshot: PageSnapshot) -> list[AIFinding]:
+async def run_semantic_check(snapshot: PageSnapshot) -> list[AIFinding]:
     # Keep the excerpt bounded -- full page HTML for a large page would be
     # wasteful for a check that only cares about accessible-name content.
     excerpt = snapshot.html[:8000]
     prompt = _SEMANTIC_PROMPT.format(html_excerpt=excerpt)
-    result = generate_structured(FLASH_LITE, prompt, _AIFindingsResponse)
+    result = await generate_structured(FLASH_LITE, prompt, _AIFindingsResponse)
     return result.findings

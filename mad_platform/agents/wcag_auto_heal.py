@@ -20,7 +20,8 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from mad_platform.state import firestore_client as fs
-from mad_platform.tools.gemini_client import FLASH, generate_structured
+from mad_platform.tools.adk_client import generate_structured
+from mad_platform.tools.gemini_client import FLASH
 from mad_platform.tools.rag import embed_and_store_corpus
 from mad_platform.tools.wcag_version import fetch_current_wcag_version
 
@@ -49,12 +50,12 @@ Give a confidence (0-1) and a one-sentence reason.
 """
 
 
-def classify_version_change(old_version: str, new_version: str) -> _VersionChangeClassification:
+async def classify_version_change(old_version: str, new_version: str) -> _VersionChangeClassification:
     prompt = _CLASSIFY_PROMPT.format(old_version=old_version, new_version=new_version)
-    return generate_structured(FLASH, prompt, _VersionChangeClassification)
+    return await generate_structured(FLASH, prompt, _VersionChangeClassification)
 
 
-def run_wcag_freshness_check(simulate_current_version: str | None = None) -> dict:
+async def run_wcag_freshness_check(simulate_current_version: str | None = None) -> dict:
     """The scheduled freshness-check tick.
 
     simulate_current_version overrides the real W3C fetch (see
@@ -78,7 +79,7 @@ def run_wcag_freshness_check(simulate_current_version: str | None = None) -> dic
         fs.set_kb_version(current_version)
         return {"action": "initialized", "version": current_version}
 
-    classification = classify_version_change(stored_version, current_version)
+    classification = await classify_version_change(stored_version, current_version)
 
     if classification.change_type == "minor" and classification.confidence >= _MINOR_AUTO_REFRESH_THRESHOLD:
         embed_and_store_corpus()
