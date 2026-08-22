@@ -19,7 +19,7 @@ deliberate security measure — see *Tech stack* below).
 small fictional business site, seeded with real accessibility violations,
 built to give the scanner a consistent, reliable target ([`docs/`](docs/)).
 
-**[Architecture diagram](https://claude.ai/code/artifact/a248d861-2f0d-4176-801e-af7c748a9309)**
+**[Architecture diagram](https://pandayv.github.io/mad-platform/architecture.html)**
 — the full pipeline, the WCAG auto-heal loop, and the Google Cloud
 infrastructure behind it.
 

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MAD Platform Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f5f5fa;
+  --surface: #ffffff;
+  --ink: #1c1b29;
+  --ink-muted: #5f5b78;
+  --border: #e1dfee;
+  --border-strong: #cac6e0;
+  --accent-agent: #5b54c9;
+  --accent-agent-tint: #edecfa;
+  --accent-tool: #0d7d6f;
+  --accent-tool-tint: #e4f4f1;
+  --accent-human: #b45309;
+  --accent-human-tint: #fbf0e2;
+  --accent-infra: #475569;
+  --accent-infra-tint: #eceff2;
+  --shadow: 0 1px 2px rgba(28,27,41,0.04), 0 4px 12px rgba(28,27,41,0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14131e;
+    --surface: #1c1b29;
+    --ink: #f0eff7;
+    --ink-muted: #a9a4c4;
+    --border: #322f47;
+    --border-strong: #433f5e;
+    --accent-agent: #8981e8;
+    --accent-agent-tint: #262247;
+    --accent-tool: #3fbfa8;
+    --accent-tool-tint: #16332d;
+    --accent-human: #e0a052;
+    --accent-human-tint: #3a2a15;
+    --accent-infra: #9aa7b8;
+    --accent-infra-tint: #262b34;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.3);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14131e;
+  --surface: #1c1b29;
+  --ink: #f0eff7;
+  --ink-muted: #a9a4c4;
+  --border: #322f47;
+  --border-strong: #433f5e;
+  --accent-agent: #8981e8;
+  --accent-agent-tint: #262247;
+  --accent-tool: #3fbfa8;
+  --accent-tool-tint: #16332d;
+  --accent-human: #e0a052;
+  --accent-human-tint: #3a2a15;
+  --accent-infra: #9aa7b8;
+  --accent-infra-tint: #262b34;
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.3);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.45;
+  padding: 48px 24px 80px;
+}
+.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+.page { max-width: 980px; margin: 0 auto; }
+
+header { margin-bottom: 36px; }
+.eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-agent);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+.subtitle {
+  color: var(--ink-muted);
+  font-size: 15.5px;
+  max-width: 62ch;
+}
+
+/* legend */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  margin: 28px 0 40px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-muted); }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+/* section framing */
+.zone {
+  border: 1px dashed var(--border-strong);
+  border-radius: 16px;
+  padding: 28px 24px 24px;
+  margin-bottom: 28px;
+  position: relative;
+}
+.zone-label {
+  position: absolute;
+  top: -12px;
+  left: 20px;
+  background: var(--bg);
+  padding: 0 10px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.zone-note {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin: -8px 0 20px;
+  max-width: 68ch;
+}
+
+/* trigger row */
+.trigger-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.trigger {
+  flex: 1;
+  min-width: 200px;
+  border-radius: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.trigger.active { border-color: var(--accent-agent); box-shadow: 0 0 0 1px var(--accent-agent) inset; }
+.trigger.dormant { opacity: 0.55; }
+.trigger .label { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+.trigger .desc { font-size: 12.5px; color: var(--ink-muted); }
+.trigger .tag {
+  display: inline-block;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 5px;
+  margin-top: 8px;
+  font-weight: 600;
+}
+.tag.live { background: var(--accent-agent-tint); color: var(--accent-agent); }
+.tag.deferred { background: var(--accent-infra-tint); color: var(--accent-infra); }
+
+.arrow-down {
+  display: flex;
+  justify-content: center;
+  color: var(--border-strong);
+  font-size: 20px;
+  margin: 6px 0;
+}
+
+/* pipeline */
+.pipeline { display: flex; flex-direction: column; gap: 0; }
+.step-row { display: flex; align-items: stretch; gap: 18px; }
+.step-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 22px;
+  flex-shrink: 0;
+}
+.step-connector .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent-agent);
+  margin-top: 22px;
+  flex-shrink: 0;
+}
+.step-connector .line { width: 2px; flex: 1; background: var(--border-strong); margin-top: 4px; }
+.step-row:last-child .step-connector .line { display: none; }
+
+.step-card {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.step-card.tool { border-left: 4px solid var(--accent-tool); }
+.step-card.agent { border-left: 4px solid var(--accent-agent); }
+.step-card.human { border-left: 4px solid var(--accent-human); }
+
+.step-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.step-title { font-weight: 700; font-size: 15.5px; }
+.step-kind {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.step-kind.agent { background: var(--accent-agent-tint); color: var(--accent-agent); }
+.step-kind.tool { background: var(--accent-tool-tint); color: var(--accent-tool); }
+.step-kind.human { background: var(--accent-human-tint); color: var(--accent-human); }
+
+.step-desc { font-size: 13.5px; color: var(--ink-muted); margin-top: 6px; max-width: 62ch; }
+
+.lens-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.lens-tag {
+  font-size: 10.5px;
+  font-family: "IBM Plex Mono", monospace;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+}
+
+/* branch (parallel fan-out) */
+.branch-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+.branch-item {
+  background: var(--accent-tool-tint);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--ink);
+}
+.branch-item b { display: block; font-size: 12.5px; margin-bottom: 2px; }
+
+/* route split */
+.route-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 4px; }
+
+/* WCAG loop */
+.loop-diagram {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.loop-node {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  flex: 1;
+  min-width: 130px;
+  text-align: center;
+}
+.loop-node.decision { border-color: var(--accent-human); background: var(--accent-human-tint); }
+.loop-arrow { color: var(--ink-muted); font-size: 16px; flex-shrink: 0; }
+
+/* infra strip */
+.infra-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.infra-item {
+  background: var(--accent-infra-tint);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.infra-item .name { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; color: var(--accent-infra); }
+.infra-item .role { font-size: 11.5px; color: var(--ink-muted); margin-top: 2px; }
+
+footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--ink-muted);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+footer a { color: var(--accent-agent); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+@media (max-width: 640px) {
+  .branch-group { grid-template-columns: 1fr; }
+  .route-split { grid-template-columns: 1fr; }
+  h1 { font-size: 26px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<header>
+  <div class="eyebrow">System Architecture</div>
+  <h1>MAD Platform</h1>
+  <div class="subtitle">Autonomous WCAG accessibility scanning — an agent that finds real issues, verifies its own findings, and takes action on what's confirmed. Built on Gemini, Google's Agent Development Kit, and Google Cloud.</div>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:var(--accent-agent)"></span>Agent — LLM judgment</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--accent-tool)"></span>Tool — deterministic code</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--accent-human)"></span>Human approval</div>
+  <div class="legend-item"><span class="legend-dot" style="background:var(--accent-infra)"></span>Google Cloud infrastructure</div>
+</div>
+
+<div class="zone">
+  <div class="zone-label">Entry point</div>
+  <div class="trigger-row">
+    <div class="trigger active">
+      <div class="label">Web app — scan a site on demand</div>
+      <div class="desc">A URL submitted through the live front end kicks off a Review Cycle directly.</div>
+      <span class="tag live">Live</span>
+    </div>
+  </div>
+</div>
+
+<div class="zone">
+  <div class="zone-label">Review Cycle</div>
+  <div class="zone-note">Sequential where order matters, parallel where it doesn't, dynamic delegation only at genuine judgment points.</div>
+
+  <div class="pipeline">
+
+    <div class="step-row">
+      <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
+      <div class="step-card agent">
+        <div class="step-head">
+          <span class="step-title">Orchestrator — select pages</span>
+          <span class="step-kind agent">agent</span>
+        </div>
+        <div class="step-desc">Fetches the entry page, reads nav links, decides which pages carry real risk (forms, checkout, account flows) — a bounded, justified subset, not exhaustive crawling.</div>
+        <div class="lens-tags"><span class="lens-tag">orchestration — dynamic delegation</span></div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
+      <div class="step-card tool">
+        <div class="step-head">
+          <span class="step-title">Analyst — parallel per-page checks</span>
+          <span class="step-kind tool">tool + agent</span>
+        </div>
+        <div class="step-desc">Independent checks with no ordering dependency, run concurrently. Tuned high-recall — over-flagging is acceptable, missing a real violation is not.</div>
+        <div class="branch-group">
+          <div class="branch-item"><b>Rule checks</b>contrast, alt text, headings, labels, ARIA, tab order</div>
+          <div class="branch-item"><b>Visual AI</b>screenshot review — focus indicators, visual contrast</div>
+          <div class="branch-item"><b>Semantic AI</b>grounded in the WCAG knowledge base below</div>
+        </div>
+        <div class="lens-tags"><span class="lens-tag">orchestration — parallel fan-out</span></div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
+      <div class="step-card agent">
+        <div class="step-head">
+          <span class="step-title">Editor — independent verification</span>
+          <span class="step-kind agent">agent</span>
+        </div>
+        <div class="step-desc">Re-checks every flag against the underlying evidence. Dismisses false positives with a documented reason; assigns a validated confidence score to what survives.</div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
+      <div class="step-card agent">
+        <div class="step-head">
+          <span class="step-title">Orchestrator — retry gate</span>
+          <span class="step-kind agent">agent</span>
+        </div>
+        <div class="step-desc">"Good enough, or one more pass?" Capped at exactly one retry — a bounded loop, not open-ended.</div>
+        <div class="lens-tags"><span class="lens-tag">feedback loop — bounded</span></div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-connector"><div class="dot"></div><div class="line"></div></div>
+      <div class="step-card agent">
+        <div class="step-head">
+          <span class="step-title">Reporter — rank and draft</span>
+          <span class="step-kind agent">agent</span>
+        </div>
+        <div class="step-desc">Ranks confirmed findings by real-world risk — WCAG level, litigation pattern frequency, user impact — and drafts the styled report against one fixed template.</div>
+      </div>
+    </div>
+
+    <div class="step-row">
+      <div class="step-connector"><div class="dot"></div></div>
+      <div class="step-card">
+        <div class="step-head">
+          <span class="step-title">Orchestrator — route and act</span>
+        </div>
+        <div class="step-desc">One escalation gate: low confidence or critical severity routes to a human; everything else is fully autonomous.</div>
+        <div class="route-split">
+          <div class="branch-item" style="background:var(--accent-tool-tint)"><b>Action Agent</b>Files a ticket automatically. Idempotent — a retried step never double-files.<div class="lens-tags"><span class="lens-tag">idempotency</span></div></div>
+          <div class="branch-item" style="background:var(--accent-human-tint)"><b>SME review queue</b>Confirm → files the ticket. Dismiss → never becomes a ticket.<div class="lens-tags"><span class="lens-tag">human approval</span></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="zone">
+  <div class="zone-label">Memory — WCAG knowledge base</div>
+  <div class="zone-note">Grounds Analyst and Editor's citations against the real standard instead of the model's unaided claim, and stays current on its own.</div>
+  <div class="loop-diagram">
+    <div class="loop-node mono">Cloud Scheduler tick</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-node mono">Fetch current WCAG version</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-node decision mono">Classify: minor or major?</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-node mono">Auto-refresh <span style="color:var(--ink-muted)">or</span> escalate to SME</div>
+  </div>
+  <div class="lens-tags" style="margin-top:14px"><span class="lens-tag">memory / vector search</span><span class="lens-tag">feedback loop — self-heal</span><span class="lens-tag">human approval on structural change</span></div>
+</div>
+
+<div class="zone">
+  <div class="zone-label">Resumability</div>
+  <div class="zone-note">Every stage above checkpoints its completion to Firestore as it finishes. A restart — crash, redeploy — reads the last completed checkpoint and resumes from the next incomplete stage. It never blindly restarts from the top, and never assumes a stage completed just because the job record exists.</div>
+  <div class="lens-tags"><span class="lens-tag">resumability</span><span class="lens-tag">crash-safe by design</span></div>
+</div>
+
+<div class="zone">
+  <div class="zone-label">Google Cloud infrastructure</div>
+  <div class="infra-grid">
+    <div class="infra-item"><div class="name">Cloud Run</div><div class="role">4 services, scale-to-zero, least-privilege per service</div></div>
+    <div class="infra-item"><div class="name">Vertex AI · Gemini</div><div class="role">Flash-lite for volume, Flash for judgment calls</div></div>
+    <div class="infra-item"><div class="name">Firestore</div><div class="role">Job checkpoints, findings, escalations, KB version</div></div>
+    <div class="infra-item"><div class="name">Cloud Storage</div><div class="role">Generated HTML reports</div></div>
+    <div class="infra-item"><div class="name">Cloud Scheduler</div><div class="role">Drives the WCAG freshness tick</div></div>
+    <div class="infra-item"><div class="name">Secret Manager</div><div class="role">Access codes, ticketing credentials</div></div>
+    <div class="infra-item"><div class="name">Playwright</div><div class="role">Headless render, screenshot, computed styles</div></div>
+  </div>
+</div>
+
+<footer>
+  <span>MAD Platform — All Things Agentic Hackathon</span>
+  <a href="https://github.com/pandayv/mad-platform" target="_blank" rel="noopener">github.com/pandayv/mad-platform</a>
+</footer>
+
+</div>
+</body>
+</html>
