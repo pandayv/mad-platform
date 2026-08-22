@@ -31,6 +31,7 @@ from mad_platform.agents.wcag_auto_heal import resolve_kb_escalation
 from mad_platform.state import firestore_client as fs
 from mad_platform.state import storage_client
 from mad_platform.tools.issue_sink import IssueSink, JiraIssueSink, MockIssueSink
+from mad_platform.web import theme
 
 logger = logging.getLogger("mad_platform.web")
 
@@ -68,40 +69,13 @@ _REVIEW_COOKIE = "mad_review_session"
 def _is_reviewer(request: Request) -> bool:
     return not _REVIEW_CODE or request.cookies.get(_REVIEW_COOKIE) == _REVIEW_CODE
 
-_BASE_STYLE = """
-:root {
-  --bg: #f7f8fa; --surface: #ffffff; --text: #1b1e24;
-  --text-muted: #5b6472; --border: #dde1e8; --brand: #5b54c9;
-}
-* { box-sizing: border-box; }
-body {
-  margin: 0; background: var(--bg); color: var(--text); min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-}
-.page { max-width: 640px; margin: 0 auto; padding: 60px 24px; }
-.brand { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand); font-weight: 700; margin-bottom: 6px; }
-h1 { font-size: 26px; margin: 0 0 8px; }
-.tagline { color: var(--text-muted); font-size: 15px; margin-bottom: 32px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 28px; }
-input[type=url] {
-  width: 100%; padding: 12px 14px; font-size: 15px; border: 1px solid var(--border);
-  border-radius: 8px; margin-bottom: 14px;
-}
-button, .btn {
-  display: inline-block; background: var(--brand); color: #fff; border: none;
-  padding: 12px 20px; font-size: 15px; font-weight: 600; border-radius: 8px;
-  cursor: pointer; text-decoration: none;
-}
-button:hover, .btn:hover { opacity: 0.92; }
-.btn-secondary { background: var(--surface); color: var(--brand); border: 1px solid var(--brand); }
-.error-box { background: #FEF2F2; border: 1px solid #FCA5A5; color: #991B1B; border-radius: 8px; padding: 14px 18px; margin-top: 16px; }
-"""
+_BASE_STYLE = theme.THEME_CSS
 
 
 def _render_form(error: str | None = None) -> str:
     code_field = (
-        '<input type="password" name="code" placeholder="Access code" required style="margin-top:10px" autocomplete="off">'
+        '<label class="f-label" for="code">Access code</label>'
+        '<input id="code" type="password" name="code" required autocomplete="off">'
         if _ACCESS_CODE
         else ""
     )
@@ -112,18 +86,20 @@ def _render_form(error: str | None = None) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MAD Platform — Accessibility Scan</title>
+{theme.FONT_LINK}
 <style>{_BASE_STYLE}</style>
 </head>
 <body>
 <div class="page">
-  <div class="brand">MAD Platform</div>
+  <div class="brand"><span class="dot-b"></span>MAD Platform</div>
   <h1>Scan a website for accessibility risk</h1>
   <div class="tagline">Autonomous WCAG scanning, verified findings, real tickets filed -- not just a report.</div>
   <div class="card">
     <form action="/scan" method="post">
-      <input type="url" name="url" placeholder="https://example.com" required autofocus>
+      <label class="f-label" for="url">Website URL</label>
+      <input id="url" type="url" name="url" placeholder="https://example.com" required autofocus>
       {code_field}
-      <div style="margin-top:14px"><button type="submit">Scan now</button></div>
+      <div style="margin-top:14px"><button type="submit">Scan now →</button></div>
     </form>
     {error_html}
   </div>
@@ -139,33 +115,12 @@ _STATUS_PAGE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scanning — MAD Platform</title>
-<style>__STYLE__
-.stage-list { list-style: none; padding: 0; margin: 20px 0 0; }
-.stage-list li { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px; display: flex; justify-content: space-between; }
-.stage-list li:last-child { border-bottom: none; }
-.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
-.spinner {
-  display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border);
-  border-top-color: var(--brand); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.score-badge {
-  width: 84px; height: 84px; border-radius: 50%; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; border: 4px solid; font-weight: 700; flex-shrink: 0;
-}
-.score-badge .n { font-size: 26px; line-height: 1; }
-.score-badge .l { font-size: 9px; text-transform: uppercase; letter-spacing: 0.03em; opacity: 0.8; }
-.result-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 20px; }
-.stat-bar { display: flex; gap: 10px; margin: 16px 0; flex-wrap: wrap; }
-.stat { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; text-align: center; min-width: 80px; }
-.stat .n { font-size: 20px; font-weight: 700; }
-.stat .l { font-size: 10px; color: var(--text-muted); text-transform: uppercase; }
-.actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
-</style>
+__FONT_LINK__
+<style>__STYLE__</style>
 </head>
 <body>
 <div class="page">
-  <div class="brand"><a href="/" style="color:inherit;text-decoration:none">MAD Platform</a></div>
+  <div class="brand"><a href="/" style="color:inherit;text-decoration:none"><span class="dot-b"></span>MAD Platform</a></div>
   <h1 id="heading">Scanning __URL__</h1>
   <div class="tagline" id="tagline">This runs the real pipeline: page selection, parallel analysis, independent verification, ranking, ticket filing.</div>
   <div class="error-box" id="slow-warning" style="display:none;margin-bottom:16px">
@@ -179,7 +134,50 @@ _STATUS_PAGE = """<!DOCTYPE html>
 </div>
 <script>
 const jobId = __JOB_ID__;
-const severityColor = {critical: "#B91C1C", high: "#C2410C", medium: "#A16207", low: "#1D4ED8"};
+const SEV_ORDER = ["critical", "high", "medium", "low"];
+const SEV_VAR = {critical: "var(--crit)", high: "var(--high)", medium: "var(--med)", low: "var(--low)"};
+const PRINCIPLE_ORDER = ["Perceivable", "Operable", "Understandable", "Robust"];
+
+function donutSvg(counts) {
+  const total = SEV_ORDER.reduce((s, k) => s + (counts[k] || 0), 0);
+  const r = 40, C = 2 * Math.PI * r;
+  let circles = `<circle cx="48" cy="48" r="${r}" fill="none" stroke="var(--border)" stroke-width="14"/>`;
+  let offset = 0;
+  for (const sev of SEV_ORDER) {
+    const count = counts[sev] || 0;
+    if (!count) continue;
+    const len = (count / total) * C;
+    circles += `<circle cx="48" cy="48" r="${r}" fill="none" stroke="${SEV_VAR[sev]}" stroke-width="14" ` +
+      `stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}"/>`;
+    offset += len;
+  }
+  const legend = SEV_ORDER.map(sev =>
+    `<li><span class="lg-dot" style="background:${SEV_VAR[sev]}"></span>${sev[0].toUpperCase()}${sev.slice(1)}<b>${counts[sev] || 0}</b></li>`
+  ).join("");
+  return `<div class="donut-wrap"><svg width="88" height="88" viewBox="0 0 96 96" role="img" aria-label="${total} findings by severity">` +
+    `<g transform="rotate(-90 48 48)">${circles}</g>` +
+    `<text x="48" y="45" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="19" font-weight="800" fill="var(--ink)">${total}</text>` +
+    `<text x="48" y="59" text-anchor="middle" font-family="Public Sans, sans-serif" font-size="7.5" fill="var(--muted)" letter-spacing="0.4">FINDINGS</text></svg>` +
+    `<ul class="donut-legend">${legend}</ul></div>`;
+}
+
+function catChart(counts) {
+  const max = Math.max(1, ...PRINCIPLE_ORDER.map(p => counts[p] || 0));
+  const rows = PRINCIPLE_ORDER.map(p => {
+    const n = counts[p] || 0;
+    return `<div class="cat-row"><span class="cat-lbl">${p}</span><div class="cat-bar-track">` +
+      `<div class="cat-bar-fill" style="width:${(n / max * 100).toFixed(0)}%"></div></div><span class="cat-n">${n}</span></div>`;
+  }).join("");
+  return `<div class="cat-chart">${rows}</div>`;
+}
+
+function scoreNote(counts) {
+  const c = counts.critical || 0, h = counts.high || 0;
+  if (c) return `${c} critical issue${c !== 1 ? "s" : ""} ${c === 1 ? "needs" : "need"} immediate attention.`;
+  if (h) return `${h} high-severity issue${h !== 1 ? "s" : ""} found, nothing critical.`;
+  const total = SEV_ORDER.reduce((s, k) => s + (counts[k] || 0), 0);
+  return total ? "Only medium- and low-severity issues found." : "No confirmed findings on the pages checked.";
+}
 
 // Human-readable label per orchestrator phase (mad_platform/agents/
 // orchestrator.py's fs.set_job_phase calls) -- without this, the gaps
@@ -225,8 +223,8 @@ function esc(s) {
 
 function stageDot(stage) {
   const done = stage === "verified";
-  const color = done ? "#15803D" : (stage ? "#A16207" : "#9CA3AF");
-  return `<span class="dot" style="background:${color}"></span>`;
+  const color = done ? "var(--ok)" : (stage ? "var(--med)" : "var(--border)");
+  return `<span class="stg-dot" style="background:${color}"></span>`;
 }
 
 function renderInProgress(data) {
@@ -235,12 +233,12 @@ function renderInProgress(data) {
   const phaseLabel = PHASE_LABELS[data.phase] || "Starting...";
   let rows = Object.entries(data.pages).map(([url, info]) => {
     const stage = info.stage || "pending";
-    return `<li><span>${stageDot(info.stage)}${esc(url)}</span><span style="color:var(--text-muted)">${esc(stage)}</span></li>`;
+    return `<li><span>${stageDot(info.stage)}${esc(url)}</span><span style="color:var(--muted)">${esc(stage)}</span></li>`;
   }).join("");
   document.getElementById("content").innerHTML =
     `<div style="display:flex;justify-content:space-between;align-items:center">` +
     `<span><span class="spinner"></span> ${esc(phaseLabel)}</span>` +
-    `<span id="elapsed" style="color:var(--text-muted);font-size:13px">${elapsedText()}</span></div>` +
+    `<span id="elapsed" style="color:var(--muted);font-size:13px">${elapsedText()}</span></div>` +
     (rows ? `<ul class="stage-list">${rows}</ul>` : "");
 }
 
@@ -251,27 +249,23 @@ function renderCompleted(data) {
   document.getElementById("tagline").textContent = data.url;
   // (textContent above is inherently safe -- only the innerHTML build below needs esc())
   const counts = s.severity_counts;
-  const statHtml = ["critical", "high", "medium", "low"].map(sev =>
-    `<div class="stat" style="border-top:3px solid ${severityColor[sev]}">
-       <div class="n" style="color:${severityColor[sev]}">${counts[sev] || 0}</div>
-       <div class="l">${sev}</div>
-     </div>`
-  ).join("");
+  const pCounts = s.principle_counts || {};
   document.getElementById("content").innerHTML = `
-    <div class="result-header">
-      <div>
-        <div style="font-size:15px;color:var(--text-muted)">${s.total_findings} confirmed finding(s) &middot; ${s.filed_count} ticket(s) filed &middot; ${s.escalated_count} awaiting SME review</div>
+    <div class="meta-line">${s.total_findings} confirmed finding(s) &middot; ${s.filed_count} ticket(s) filed &middot; ${s.escalated_count} awaiting SME review</div>
+    <div class="dash-row">
+      <div class="dash-card"><div class="dc-title">Site score</div>
+        <div class="dash-score">
+          <div class="score-dial" style="border-color:${s.score_color};color:${s.score_color}"><div class="n">${s.score}</div><div class="l">Score</div></div>
+          <div class="score-note">${esc(scoreNote(counts))}</div>
+        </div>
       </div>
-      <div class="score-badge" style="border-color:${s.score_color};color:${s.score_color}">
-        <div class="n">${s.score}</div>
-        <div class="l">Score</div>
-      </div>
+      <div class="dash-card"><div class="dc-title">By severity</div>${donutSvg(counts)}</div>
+      <div class="dash-card"><div class="dc-title">By WCAG principle</div>${catChart(pCounts)}</div>
     </div>
-    <div class="stat-bar">${statHtml}</div>
     <div class="actions">
       <a class="btn" href="/report/${jobId}" target="_blank">View full report</a>
-      <a class="btn btn-secondary" href="/report/${jobId}?download=1">Download HTML</a>
-      <a class="btn btn-secondary" href="/">Scan another site</a>
+      <a class="btn ghost" href="/report/${jobId}?download=1">Download HTML</a>
+      <a class="btn ghost" href="/">Scan another site</a>
     </div>`;
 }
 
@@ -318,6 +312,7 @@ async def _run_and_store(job_id: str, url: str) -> None:
             "score": score,
             "score_color": score_color(score),
             "severity_counts": counts,
+            "principle_counts": theme.principle_counts([r.wcag_criterion for r in all_ranked]),
             "total_findings": len(all_ranked),
             "filed_count": len(result.filed) + len(result.already_filed),
             "escalated_count": len(result.escalated),
@@ -345,9 +340,12 @@ async def status_page(job_id: str) -> str:
     job = fs.get_job(job_id)
     if job is None:
         raise HTTPException(404, "No such job")
-    return _STATUS_PAGE.replace("__STYLE__", _BASE_STYLE).replace(
-        "__URL__", html.escape(job["url"])
-    ).replace("__JOB_ID__", f'"{job_id}"')
+    return (
+        _STATUS_PAGE.replace("__STYLE__", _BASE_STYLE)
+        .replace("__FONT_LINK__", theme.FONT_LINK)
+        .replace("__URL__", html.escape(job["url"]))
+        .replace("__JOB_ID__", f'"{job_id}"')
+    )
 
 
 @app.get("/api/status/{job_id}")
@@ -411,17 +409,18 @@ def _render_review_login(error: str | None = None) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Internal Review — MAD Platform</title>
+{theme.FONT_LINK}
 <style>{_BASE_STYLE}</style>
 </head>
 <body>
 <div class="page">
-  <div class="brand">MAD Platform</div>
+  <div class="brand"><span class="dot-b"></span>MAD Platform</div>
   <h1>Internal review queue</h1>
   <div class="tagline">Not for customer access — authorized reviewers only.</div>
   <div class="card">
     <form action="/review/login" method="post">
-      <input type="password" name="code" placeholder="Review code" required autofocus autocomplete="off"
-             style="width:100%;padding:12px 14px;font-size:15px;border:1px solid var(--border);border-radius:8px">
+      <label class="f-label" for="rcode">Review code</label>
+      <input id="rcode" type="password" name="code" required autofocus autocomplete="off">
       <div style="margin-top:14px"><button type="submit">Enter</button></div>
     </form>
     {error_html}
@@ -431,15 +430,22 @@ def _render_review_login(error: str | None = None) -> str:
 </html>"""
 
 
-def _review_item_label(e: dict) -> tuple[str, str]:
+def _review_item_row(e: dict) -> str:
+    eid = html.escape(e["id"])
     if e.get("kind") == "kb_version_change":
         return (
-            f"WCAG version change: {e.get('old_version')} → {e.get('new_version')}",
-            f"Classified {e.get('change_type')}, confidence {e.get('confidence', 0):.2f}",
+            f'<tr><td><span class="badge sev-low">KB version</span></td>'
+            f"<td>WCAG {html.escape(str(e.get('old_version')))} → {html.escape(str(e.get('new_version')))} "
+            f"— classified {html.escape(str(e.get('change_type')))}</td>"
+            f'<td class="mono">{e.get("confidence", 0):.2f}</td>'
+            f'<td><a class="btn btn-secondary" href="/review/{eid}" style="padding:6px 14px;font-size:12.5px">Review →</a></td></tr>'
         )
+    sev = str(e.get("severity", "medium")).lower()
     return (
-        f"WCAG {e.get('wcag_criterion', '?')} — {e.get('severity', '?').upper()}",
-        e.get("page_url", ""),
+        f'<tr><td><span class="badge sev-{sev}">Finding</span></td>'
+        f"<td>WCAG {html.escape(str(e.get('wcag_criterion', '?')))} — {html.escape(str(e.get('page_url', '')))}</td>"
+        f'<td class="mono">{e.get("editor_confidence", 0):.2f}</td>'
+        f'<td><a class="btn btn-secondary" href="/review/{eid}" style="padding:6px 14px;font-size:12.5px">Review →</a></td></tr>'
     )
 
 
@@ -447,27 +453,23 @@ def _render_review_list(pending: list[dict]) -> str:
     if not pending:
         items_html = '<div class="tagline" style="margin:0">Nothing pending — the queue is empty.</div>'
     else:
-        rows = []
-        for e in pending:
-            label, sub = _review_item_label(e)
-            rows.append(
-                f'<a class="btn btn-secondary" style="display:block;text-align:left;margin-bottom:10px;white-space:normal" '
-                f'href="/review/{html.escape(e["id"])}">'
-                f'{html.escape(label)}<br>'
-                f'<span style="font-weight:400;font-size:13px;color:var(--text-muted)">{html.escape(sub)}</span></a>'
-            )
-        items_html = "".join(rows)
+        rows = "".join(_review_item_row(e) for e in pending)
+        items_html = (
+            '<table class="q-list"><thead><tr><th>Type</th><th>Detail</th><th>Confidence</th><th></th></tr>'
+            f"</thead><tbody>{rows}</tbody></table>"
+        )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Internal Review — MAD Platform</title>
+{theme.FONT_LINK}
 <style>{_BASE_STYLE}</style>
 </head>
 <body>
-<div class="page">
-  <div class="brand">MAD Platform</div>
+<div class="page wide">
+  <div class="brand"><span class="dot-b"></span>MAD Platform</div>
   <h1>Internal review queue</h1>
   <div class="tagline">{len(pending)} item(s) awaiting disposition.</div>
   <div class="card">{items_html}</div>
@@ -478,22 +480,24 @@ def _render_review_list(pending: list[dict]) -> str:
 
 def _render_review_detail(e: dict, message: str | None = None) -> str:
     eid = e["id"]
-    message_html = f'<div class="card" style="margin-top:16px;background:#F0FDF4;border-color:#86EFAC">{html.escape(message)}</div>' if message else ""
+    message_html = f'<div class="success-box">{html.escape(message)}</div>' if message else ""
 
     if e.get("kind") == "kb_version_change":
         body = f"""
-          <div class="field"><b>WCAG version change</b></div>
-          <p>{html.escape(str(e.get('old_version')))} → {html.escape(str(e.get('new_version')))}</p>
-          <p>Classified: {html.escape(str(e.get('change_type')))} (confidence {e.get('confidence', 0):.2f})</p>
-          <p>{html.escape(str(e.get('reasoning', '')))}</p>
+          <div class="field"><b>WCAG version change</b> <span class="badge sev-low">KB version</span></div>
+          <div class="field">{html.escape(str(e.get('old_version')))} → {html.escape(str(e.get('new_version')))}</div>
+          <div class="field">Classified: {html.escape(str(e.get('change_type')))} (confidence {e.get('confidence', 0):.2f})</div>
+          <div class="field">{html.escape(str(e.get('reasoning', '')))}</div>
         """
     else:
+        sev = str(e.get("severity", "medium")).lower()
         body = f"""
-          <div class="field"><b>WCAG {html.escape(str(e.get('wcag_criterion', '')))}</b> — {html.escape(str(e.get('severity', '')).upper())}</div>
-          <p><b>Page:</b> {html.escape(str(e.get('page_url', '')))}</p>
-          <p><b>Confidence:</b> {e.get('editor_confidence', 0):.2f}</p>
-          <p><b>Evidence:</b> {html.escape(str(e.get('editor_rationale', '')))}</p>
-          <p><b>Suggested fix:</b> {html.escape(str(e.get('suggested_fix', '')))}</p>
+          <div class="field"><b>WCAG {html.escape(str(e.get('wcag_criterion', '')))}</b> <span class="badge sev-{sev}">{html.escape(str(e.get('severity', '')))}</span></div>
+          <div class="field"><b>Page:</b> {html.escape(str(e.get('page_url', '')))}</div>
+          <div class="field"><b>Confidence:</b> <span class="mono">{e.get('editor_confidence', 0):.2f}</span></div>
+          <div class="field"><b>Evidence:</b> {html.escape(str(e.get('editor_rationale', '')))}</div>
+          <div class="field"><b>Suggested fix:</b></div>
+          <div class="fix-cell" style="max-width:none">{html.escape(str(e.get('suggested_fix', '')))}</div>
         """
 
     resolved = e.get("status") == "resolved"
@@ -515,11 +519,12 @@ def _render_review_detail(e: dict, message: str | None = None) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Internal Review — MAD Platform</title>
+{theme.FONT_LINK}
 <style>{_BASE_STYLE}</style>
 </head>
 <body>
 <div class="page">
-  <div class="brand"><a href="/review" style="color:inherit;text-decoration:none">MAD Platform — Review Queue</a></div>
+  <div class="brand"><a href="/review" style="color:inherit;text-decoration:none"><span class="dot-b"></span>MAD Platform — Review Queue</a></div>
   <h1>Review item</h1>
   <div class="card">
     {body}
