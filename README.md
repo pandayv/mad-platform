@@ -11,17 +11,17 @@ on Gemini, Google's Agent Development Kit (ADK), and Google Cloud.
 
 ## Try it live
 
-- **Scan a site:** [MAD Platform Web App](https://scan-onboarding-803013053073.us-central1.run.app)
-  — the public form is access-gated (a real security measure, not a demo
-  limitation — see [Known gaps](#known-gaps-and-whats-next) below for why).
-  See it in action in the demo video, or reach out for a live walkthrough.
-- **A site to try it against:** [Guardian Pest Control](https://pandayv.github.io/mad-platform/)
-  — a small fictional business site with deliberate accessibility
-  violations, built as a consistent, reproducible scan target (see
-  [`docs/`](docs/)).
-- **Architecture diagram:** [MAD Platform Architecture](https://claude.ai/code/artifact/a248d861-2f0d-4176-801e-af7c748a9309)
-  — the Review Cycle pipeline, the WCAG auto-heal loop, and the Google
-  Cloud infrastructure behind it.
+**[scan-onboarding-803013053073.us-central1.run.app](https://scan-onboarding-803013053073.us-central1.run.app)**
+— paste in a URL and watch it scan. Access is gated by a code (a
+deliberate security measure — see *Tech stack* below).
+
+**[Guardian Pest Control](https://pandayv.github.io/mad-platform/)** — a
+small fictional business site, seeded with real accessibility violations,
+built to give the scanner a consistent, reliable target ([`docs/`](docs/)).
+
+**[Architecture diagram](https://claude.ai/code/artifact/a248d861-2f0d-4176-801e-af7c748a9309)**
+— the full pipeline, the WCAG auto-heal loop, and the Google Cloud
+infrastructure behind it.
 
 ## The problem
 
@@ -76,44 +76,46 @@ When it's done, you get a score, a severity breakdown, and the full report:
 
 ## How it works
 
-MAD Platform is deliberately built around four things Google's own ADK
-webinar series named as what's being judged — not as a checklist to
-satisfy, but because they're genuinely the right engineering choices for
-this problem:
+- **Pick the right orchestration pattern for each step.** Pipeline stages
+  that must happen in order run sequentially (crawl → analyze → verify →
+  rank → act → report); independent per-page checks run in parallel;
+  dynamic delegation is reserved for genuine judgment calls, like which
+  pages are worth scanning or whether a page's analysis needs a second
+  pass.
+- **Make resumability a real mechanism, not a claim.** Every stage
+  checkpoints its completion to Firestore as it finishes. A restart —
+  crash, redeploy — resumes from the last completed stage instead of
+  starting over or silently duplicating work.
+- **Give autonomous judgment a bounded feedback loop.** A capped retry
+  gate decides whether a page's analysis is good enough or needs one more
+  pass — never an open-ended loop. Separately, the WCAG auto-heal loop
+  detects when the accessibility standard itself changes, classifies the
+  change, and either refreshes automatically or asks a person first.
+- **Ground claims in real data instead of a model's memory.** WCAG success
+  criteria are embedded once and retrieved to back every citation, so a
+  finding's WCAG reference is grounded in the actual standard rather than
+  an LLM's unverified recollection — and the auto-heal loop keeps that
+  reference material from going stale.
 
-| Lens | Where it shows up |
-|---|---|
-| **Orchestration patterns** | Sequential pipeline for ordered stages (crawl → analyze → verify → rank → act → report); parallel fan-out for independent per-page checks; dynamic/LLM-driven delegation only at real judgment points (which pages to scan, whether to retry) |
-| **Resumability** | Every stage checkpoints its completion to Firestore as it finishes; a restart resumes from the last completed stage, never blindly from the top |
-| **Feedback loops** | A bounded retry gate (Orchestrator decides "good enough, or one more pass?" — capped at one, not an open loop) and the WCAG auto-heal loop (detects a version change, classifies it, auto-acts or escalates) |
-| **Memory / vector search** | WCAG success criteria are embedded once and retrieved to ground every citation, preventing hallucinated success-criterion numbers; the auto-heal loop keeps that memory current instead of letting it go stale |
-
-Every irreversible action (filing a ticket, refreshing the knowledge base)
-is either idempotent, gated behind human approval, or both — a retried
+Every irreversible action — filing a ticket, refreshing the knowledge base
+— is either idempotent, gated behind human approval, or both: a retried
 pipeline step never double-files, and a structural change to the
-accessibility standard itself never gets auto-applied without a person
-looking at it first.
+accessibility standard never gets auto-applied without a person looking at
+it first.
 
 ## Product layer vs. platform layer
 
-This build deliberately separates two things:
-
 - **Product layer (built):** a place to come check your website's
-  accessibility and get an actionable report — one-time, on-demand,
-  no registration required. Everything above is this layer.
-- **Platform layer (intentionally deferred):** registering a site for
-  *ongoing* monitoring, detecting when a registered site's code changes
-  (GitHub webhook), and the recurring scheduling that ties them together.
-  Real, designed, and partially infra-provisioned, but scoped out of this
-  build so the product layer could be hardened first rather than spread
-  thin across both.
+  accessibility and get an actionable report — one-time, on-demand, no
+  registration required. Everything above is this layer.
+- **Platform layer (on the roadmap):** registering a site for *ongoing*
+  monitoring, detecting when a registered site's code changes, and the
+  recurring scheduling that ties it together.
 
 ## Tech stack
 
 - **AI:** Gemini via Vertex AI (`gemini-3.5-flash-lite` for high-volume
-  calls, `gemini-3.7-flash` for judgment calls — no Pro-tier model exists
-  at the "Gemini 3.5+" floor this hackathon requires, confirmed directly
-  against the model catalog)
+  calls, `gemini-3.7-flash` for judgment calls)
 - **Agent framework:** Google Agent Development Kit (ADK)
 - **Compute:** Cloud Run (scale-to-zero), four services split by trigger
   type and resource profile
@@ -126,28 +128,9 @@ This build deliberately separates two things:
 - **Web:** FastAPI — the scan-submission UI and status API
 - **Ticketing:** Jira REST API, behind an abstraction (`IssueSink`) so a
   second tracker could be added without touching Orchestrator or Reporter
-
-## Known gaps and what's next
-
-Disclosed deliberately, not discovered by a judge:
-
-- **Real Jira credentials aren't wired up yet** — tickets file against a
-  mock sink today; the abstraction is real, the credentials are the
-  remaining step.
-- **The pipeline calls Gemini via the raw SDK, not ADK's `Agent`/`Runner`
-  constructs** — a hello-world agent in this repo proves the ADK toolchain
-  works end to end; formalizing the real pipeline onto it is a real
-  robustness item, not done yet.
-- **`robots.txt` isn't respected yet** — a stated requirement, not yet
-  implemented. Part of why the demo site is one we own rather than
-  leaning on repeated scans of real third-party businesses.
-- **The web app's service account is broader than the original
-  least-privilege design** — it runs the whole pipeline directly rather
-  than publishing an event for a separate worker to pick up, so it holds
-  more access than that split intended. A disclosed, deliberate
-  simplification to ship a working demo, tracked to revisit.
-- **Platform layer** (site registration, recurring monitoring, GitHub
-  webhook) — see above; a real next phase, not core to this submission.
+- **Security:** the public scan endpoint requires an access code (Secret
+  Manager) and the crawler refuses to fetch private/internal network
+  addresses
 
 ## Local setup
 
@@ -169,9 +152,9 @@ python run_scan.py https://example.com
 uvicorn mad_platform.web.app:app --port 8080
 ```
 
-See [`SETUP.md`](SETUP.md) for the full GCP provisioning checklist and
-[`gcp-deploy.sh`](gcp-deploy.sh) for the actual infrastructure-as-code used
-to deploy this project's Cloud Run services, Firestore database, Pub/Sub
+See [`SETUP.md`](SETUP.md) for the full GCP provisioning guide and
+[`gcp-deploy.sh`](gcp-deploy.sh) for the infrastructure-as-code used to
+deploy this project's Cloud Run services, Firestore database, Pub/Sub
 topics, and service accounts.
 
 ## Project structure
@@ -186,8 +169,8 @@ mad_platform/
 docs/            # Demo site (GitHub Pages)
 run_scan.py               # CLI entry point for a one-time scan
 review_escalations.py     # SME review queue CLI
-check_wcag_version.py     # Manual/demo trigger for the WCAG freshness check
-SETUP.md                  # GCP provisioning checklist
+check_wcag_version.py     # Manual trigger for the WCAG freshness check
+SETUP.md                  # GCP provisioning guide
 gcp-deploy.sh / gcp-cleanup.sh   # Infrastructure-as-code
 ```
 

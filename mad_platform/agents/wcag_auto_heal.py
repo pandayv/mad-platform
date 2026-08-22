@@ -1,21 +1,18 @@
 """WCAG auto-heal: freshness-check + refresh loop for the shared knowledge
 base. Tunes the system's knowledge, not its judgment.
 
-Scope, deliberately: this detects a version change and decides whether to
-auto-refresh or escalate for human review -- it does not dynamically fetch
-and ingest new WCAG success-criteria text from W3C. Full WCAG spec
-coverage is intentionally out of scope; "refresh" here means re-embedding
-the existing curated corpus (mad_platform/data/wcag_corpus.py) and
-updating the stored version pointer. That demonstrates the real decision
-mechanism -- detect, classify, auto-act or escalate -- without pretending
-to keep pace with the full spec's content, which is a much bigger problem.
+Detects a version change and decides whether to auto-refresh or escalate
+for human review. "Refresh" means re-embedding the curated corpus
+(mad_platform/data/wcag_corpus.py) and updating the stored version
+pointer -- it does not dynamically fetch and ingest new WCAG
+success-criteria text from W3C.
 
 Minor-vs-major classification leans on the model's own general knowledge
 of WCAG's versioning history (2.0 -> 2.1 -> 2.2 are documented, publicly
 well-known additive revisions within the same conformance model; a jump
 to WCAG 3.0 is documented as a structurally different scoring model) --
-this is stable, publicly established domain knowledge, not something that
-needs a freshly-scraped changelog to get right.
+stable, publicly established domain knowledge, not something that needs a
+freshly-scraped changelog to get right.
 """
 
 from __future__ import annotations
@@ -60,12 +57,10 @@ def classify_version_change(old_version: str, new_version: str) -> _VersionChang
 def run_wcag_freshness_check(simulate_current_version: str | None = None) -> dict:
     """The scheduled freshness-check tick.
 
-    simulate_current_version overrides the real W3C fetch -- demo/test
-    only (see check_wcag_version.py --simulate). A real WCAG version
-    change is rare (years apart), so waiting for one to naturally occur
-    isn't practical for development or a recorded demo; this lets the
-    decision mechanism itself be exercised on demand without faking any
-    HTTP response.
+    simulate_current_version overrides the real W3C fetch (see
+    check_wcag_version.py --simulate), letting either branch of the
+    decision be exercised on demand rather than waiting for a real WCAG
+    version change, which is rare.
     """
     stored = fs.get_kb_version()
     stored_version = stored.get("version") if stored else None
