@@ -18,6 +18,7 @@ call worth spending that on, unlike the high-volume per-page checks.
 from __future__ import annotations
 
 import html as html_lib
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -25,6 +26,14 @@ from pydantic import BaseModel
 
 from mad_platform.agents.editor import VerifiedFinding
 from mad_platform.tools.gemini_client import FLASH, FLASH_LITE, generate_structured
+
+# The report can be opened outside the app's own origin (downloaded, saved
+# locally, reopened later) so the live-status check below needs an
+# absolute URL, not a relative fetch that only works when served from
+# the app itself.
+_APP_BASE_URL = os.environ.get(
+    "MAD_APP_BASE_URL", "https://scan-onboarding-803013053073.us-central1.run.app"
+)
 
 
 @dataclass
@@ -197,13 +206,22 @@ def _stat_badge(count: int, label: str, color: str) -> str:
     )
 
 
-def _finding_card(index: int, r: RankedFinding, ticket: str | None) -> str:
+def _finding_card(index: int, r: RankedFinding, ticket: str | None, escalation_id: str | None = None) -> str:
     accent, tint = _SEVERITY_STYLE.get(r.severity.lower(), _DEFAULT_SEVERITY_STYLE)
     if ticket:
         ticket_html = f'<span class="badge" style="background:#DCFCE7;color:#15803D">Filed: {_esc(ticket)}</span>'
+    elif escalation_id:
+        # Not resolved yet as far as the report knows at generation time --
+        # the small script at the end of this page checks the live status
+        # on load and updates this badge in place, so a report reopened
+        # later reflects what actually happened instead of freezing here.
+        ticket_html = (
+            f'<span class="badge escalation-badge" data-escalation-id="{_esc(escalation_id)}" '
+            f'style="background:#FEF9C3;color:#854D0E">Awaiting internal review</span>'
+        )
     else:
         ticket_html = (
-            '<span class="badge" style="background:#FEF9C3;color:#854D0E">Pending SME review</span>'
+            '<span class="badge" style="background:#FEF9C3;color:#854D0E">Awaiting internal review</span>'
         )
     return f"""
     <div class="finding" style="border-left-color:{accent}">
@@ -323,13 +341,42 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     not raw technical severity alone.
   </footer>
 </div>
+<script>
+// Findings under internal review show "Awaiting internal review" as of
+// when this report was generated. If this page is reopened later, this
+// checks whether each one has since been resolved and updates the badge
+// in place -- so a stored report doesn't freeze in a stale state forever.
+(function () {{
+  document.querySelectorAll(".escalation-badge").forEach(function (el) {{
+    var id = el.getAttribute("data-escalation-id");
+    fetch("{app_base_url}/api/escalation/" + encodeURIComponent(id) + "/status")
+      .then(function (r) {{ return r.ok ? r.json() : null; }})
+      .then(function (data) {{
+        if (!data || !data.resolved) return;
+        if (data.ticket_id) {{
+          el.textContent = "Filed: " + data.ticket_id;
+          el.style.background = "#DCFCE7";
+          el.style.color = "#15803D";
+        }} else {{
+          el.textContent = "Reviewed — dismissed";
+          el.style.background = "#F3F4F6";
+          el.style.color = "#374151";
+        }}
+      }})
+      .catch(function () {{}});
+  }});
+}})();
+</script>
 </body>
 </html>
 """
 
 
 def draft_report(
-    url: str, ranked: list[RankedFinding], ticket_by_finding: dict[int, str | None] | None = None
+    url: str,
+    ranked: list[RankedFinding],
+    ticket_by_finding: dict[int, str | None] | None = None,
+    escalation_by_finding: dict[int, str] | None = None,
 ) -> str:
     """The fixed report template -- same structure every run, only the data
     changes. Single format (HTML): easiest to generate reliably, opens
@@ -338,6 +385,7 @@ def draft_report(
     executive summary is LLM-generated.
     """
     ticket_by_finding = ticket_by_finding or {}
+    escalation_by_finding = escalation_by_finding or {}
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     exec_summary = generate_executive_summary(url, ranked)
     score = compute_score(ranked)
@@ -353,7 +401,10 @@ def draft_report(
     if not ranked:
         finding_cards = '<div class="empty">No confirmed findings on the pages checked.</div>'
     else:
-        finding_cards = "".join(_finding_card(i, r, ticket_by_finding.get(i)) for i, r in enumerate(ranked))
+        finding_cards = "".join(
+            _finding_card(i, r, ticket_by_finding.get(i), escalation_by_finding.get(i))
+            for i, r in enumerate(ranked)
+        )
 
     return _HTML_TEMPLATE.format(
         title_url=_esc(url),
@@ -364,4 +415,5 @@ def draft_report(
         stat_badges=stat_badges,
         count=len(ranked),
         finding_cards=finding_cards,
+        app_base_url=_APP_BASE_URL,
     )

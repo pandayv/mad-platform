@@ -151,6 +151,15 @@ def list_pending_escalations() -> list[dict[str, Any]]:
     ).stream()]
 
 
+def get_escalation(escalation_id: str) -> dict[str, Any] | None:
+    """Fetches one escalation regardless of status -- unlike
+    list_pending_escalations(), this also returns already-resolved ones,
+    for callers checking on an outcome rather than building a work queue.
+    """
+    doc = _ESCALATIONS.document(escalation_id).get()
+    return {"id": doc.id, **doc.to_dict()} if doc.exists else None
+
+
 def resolve_escalation(escalation_id: str, disposition: str, reviewer: str = "sme") -> dict[str, Any]:
     """disposition: 'confirm' or 'dismiss'. Returns the escalation's data
     so the caller (Action Agent) can file a ticket if confirmed.

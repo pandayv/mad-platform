@@ -251,15 +251,19 @@ async def run_one_time_scan(
 
         # Build finding index -> ticket (or None if pending SME review),
         # so the report reflects what actually happened rather than a
-        # stale "not filed yet" placeholder.
+        # stale "not filed yet" placeholder. Escalated findings also get
+        # their escalation id, so the report can check on the outcome
+        # later instead of freezing "pending" in place forever.
         ticket_by_finding: dict[int, str | None] = {}
+        escalation_by_finding: dict[int, str] = {}
         for index, _finding, ticket_id in filing["filed"] + filing["already_filed"]:
             ticket_by_finding[index] = ticket_id
-        for index, _finding, _escalation_id in filing["escalated"]:
+        for index, _finding, escalation_id in filing["escalated"]:
             ticket_by_finding[index] = None
+            escalation_by_finding[index] = escalation_id
 
         fs.set_job_phase(job_id, "generating_report")
-        report = draft_report(url, ranked, ticket_by_finding)
+        report = draft_report(url, ranked, ticket_by_finding, escalation_by_finding)
         report_uri = storage_client.save_report(job_id, report)
         fs.complete_job(job_id)
     except Exception as exc:  # noqa: BLE001

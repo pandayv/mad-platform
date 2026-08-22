@@ -21,13 +21,16 @@ import html
 import logging
 import os
 
-from fastapi import FastAPI, Form, HTTPException
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 
+from mad_platform.agents.action_agent import resolve_escalation as resolve_finding_escalation
 from mad_platform.agents.orchestrator import run_one_time_scan
 from mad_platform.agents.reporter import compute_score, score_color
+from mad_platform.agents.wcag_auto_heal import resolve_kb_escalation
 from mad_platform.state import firestore_client as fs
 from mad_platform.state import storage_client
+from mad_platform.tools.issue_sink import MockIssueSink
 
 logger = logging.getLogger("mad_platform.web")
 
@@ -40,6 +43,20 @@ app = FastAPI(title="MAD Platform")
 # is set (Cloud Run deploys it from Secret Manager), a scan requires it;
 # if unset (local dev), the gate is open.
 _ACCESS_CODE = os.environ.get("MAD_ACCESS_CODE")
+
+# The SME review queue is a separate trust boundary from the public scan
+# form -- REQUIREMENTS §5.6 is explicit that it "must not be exposed to
+# the customer/business owner". Deliberately a different code from
+# MAD_ACCESS_CODE, not the same one reused, so having one doesn't imply
+# having the other. The session cookie just holds the code itself rather
+# than an issued token -- a reasonable simplification for this scope, not
+# a production-grade session mechanism.
+_REVIEW_CODE = os.environ.get("MAD_REVIEW_CODE")
+_REVIEW_COOKIE = "mad_review_session"
+
+
+def _is_reviewer(request: Request) -> bool:
+    return not _REVIEW_CODE or request.cookies.get(_REVIEW_COOKIE) == _REVIEW_CODE
 
 _BASE_STYLE = """
 :root {
@@ -350,3 +367,200 @@ async def get_report(job_id: str, download: int = 0) -> Response:
         raise HTTPException(404, "Report not found (job may not be complete yet)")
     headers = {"Content-Disposition": f'attachment; filename="{job_id}.html"'} if download else {}
     return Response(content=content, media_type="text/html", headers=headers)
+
+
+@app.get("/api/escalation/{escalation_id}/status")
+async def escalation_status(escalation_id: str) -> JSONResponse:
+    """Public, unauthenticated on purpose -- this is what closes the loop
+    for a report reopened later (see reporter.py's escalation-badge
+    script). Deliberately minimal: whether it's resolved and, if so,
+    whether a ticket was filed. No reviewer identity, no rationale, no
+    internal deliberation -- nothing here would be a problem for a
+    customer to see, unlike the review queue itself.
+    """
+    escalation = fs.get_escalation(escalation_id)
+    if escalation is None:
+        raise HTTPException(404, "No such escalation")
+    resolved = escalation.get("status") == "resolved"
+    ticket_id = fs.get_ticket_for_finding(escalation_id) if resolved else None
+    # A saved/downloaded report is opened from whatever origin the viewer's
+    # browser gives it (file://, a different host entirely) -- this only
+    # works cross-origin with an explicit CORS header, and it's safe to
+    # allow any origin here since the payload is already public-safe.
+    return JSONResponse(
+        {"resolved": resolved, "ticket_id": ticket_id},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
+def _render_review_login(error: str | None = None) -> str:
+    error_html = f'<div class="error-box">{html.escape(error)}</div>' if error else ""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Internal Review — MAD Platform</title>
+<style>{_BASE_STYLE}</style>
+</head>
+<body>
+<div class="page">
+  <div class="brand">MAD Platform</div>
+  <h1>Internal review queue</h1>
+  <div class="tagline">Not for customer access — authorized reviewers only.</div>
+  <div class="card">
+    <form action="/review/login" method="post">
+      <input type="password" name="code" placeholder="Review code" required autofocus autocomplete="off"
+             style="width:100%;padding:12px 14px;font-size:15px;border:1px solid var(--border);border-radius:8px">
+      <div style="margin-top:14px"><button type="submit">Enter</button></div>
+    </form>
+    {error_html}
+  </div>
+</div>
+</body>
+</html>"""
+
+
+def _review_item_label(e: dict) -> tuple[str, str]:
+    if e.get("kind") == "kb_version_change":
+        return (
+            f"WCAG version change: {e.get('old_version')} → {e.get('new_version')}",
+            f"Classified {e.get('change_type')}, confidence {e.get('confidence', 0):.2f}",
+        )
+    return (
+        f"WCAG {e.get('wcag_criterion', '?')} — {e.get('severity', '?').upper()}",
+        e.get("page_url", ""),
+    )
+
+
+def _render_review_list(pending: list[dict]) -> str:
+    if not pending:
+        items_html = '<div class="tagline" style="margin:0">Nothing pending — the queue is empty.</div>'
+    else:
+        rows = []
+        for e in pending:
+            label, sub = _review_item_label(e)
+            rows.append(
+                f'<a class="btn btn-secondary" style="display:block;text-align:left;margin-bottom:10px;white-space:normal" '
+                f'href="/review/{html.escape(e["id"])}">'
+                f'{html.escape(label)}<br>'
+                f'<span style="font-weight:400;font-size:13px;color:var(--text-muted)">{html.escape(sub)}</span></a>'
+            )
+        items_html = "".join(rows)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Internal Review — MAD Platform</title>
+<style>{_BASE_STYLE}</style>
+</head>
+<body>
+<div class="page">
+  <div class="brand">MAD Platform</div>
+  <h1>Internal review queue</h1>
+  <div class="tagline">{len(pending)} item(s) awaiting disposition.</div>
+  <div class="card">{items_html}</div>
+</div>
+</body>
+</html>"""
+
+
+def _render_review_detail(e: dict, message: str | None = None) -> str:
+    eid = e["id"]
+    message_html = f'<div class="card" style="margin-top:16px;background:#F0FDF4;border-color:#86EFAC">{html.escape(message)}</div>' if message else ""
+
+    if e.get("kind") == "kb_version_change":
+        body = f"""
+          <div class="field"><b>WCAG version change</b></div>
+          <p>{html.escape(str(e.get('old_version')))} → {html.escape(str(e.get('new_version')))}</p>
+          <p>Classified: {html.escape(str(e.get('change_type')))} (confidence {e.get('confidence', 0):.2f})</p>
+          <p>{html.escape(str(e.get('reasoning', '')))}</p>
+        """
+    else:
+        body = f"""
+          <div class="field"><b>WCAG {html.escape(str(e.get('wcag_criterion', '')))}</b> — {html.escape(str(e.get('severity', '')).upper())}</div>
+          <p><b>Page:</b> {html.escape(str(e.get('page_url', '')))}</p>
+          <p><b>Confidence:</b> {e.get('editor_confidence', 0):.2f}</p>
+          <p><b>Evidence:</b> {html.escape(str(e.get('editor_rationale', '')))}</p>
+          <p><b>Suggested fix:</b> {html.escape(str(e.get('suggested_fix', '')))}</p>
+        """
+
+    resolved = e.get("status") == "resolved"
+    if resolved:
+        actions = f'<div class="tagline" style="margin:0">Already resolved: {html.escape(str(e.get("disposition")))}.</div>'
+    else:
+        actions = f"""
+          <form action="/review/{eid}/resolve" method="post" style="display:inline-block;margin-right:10px">
+            <button type="submit" name="disposition" value="confirm">Confirm</button>
+          </form>
+          <form action="/review/{eid}/resolve" method="post" style="display:inline-block">
+            <button type="submit" name="disposition" value="dismiss" class="btn-secondary">Dismiss</button>
+          </form>
+        """
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Internal Review — MAD Platform</title>
+<style>{_BASE_STYLE}</style>
+</head>
+<body>
+<div class="page">
+  <div class="brand"><a href="/review" style="color:inherit;text-decoration:none">MAD Platform — Review Queue</a></div>
+  <h1>Review item</h1>
+  <div class="card">
+    {body}
+    <div style="margin-top:20px">{actions}</div>
+  </div>
+  {message_html}
+</div>
+</body>
+</html>"""
+
+
+@app.get("/review", response_class=HTMLResponse)
+async def review_list(request: Request) -> Response:
+    if not _is_reviewer(request):
+        return HTMLResponse(_render_review_login())
+    return HTMLResponse(_render_review_list(fs.list_pending_escalations()))
+
+
+@app.post("/review/login")
+async def review_login(code: str = Form(...)) -> Response:
+    if _REVIEW_CODE and code != _REVIEW_CODE:
+        return HTMLResponse(_render_review_login(error="Wrong review code."), status_code=403)
+    resp = RedirectResponse("/review", status_code=303)
+    resp.set_cookie(_REVIEW_COOKIE, _REVIEW_CODE or "", httponly=True, samesite="lax")
+    return resp
+
+
+@app.get("/review/{escalation_id}", response_class=HTMLResponse)
+async def review_detail(escalation_id: str, request: Request) -> Response:
+    if not _is_reviewer(request):
+        return HTMLResponse(_render_review_login())
+    escalation = fs.get_escalation(escalation_id)
+    if escalation is None:
+        raise HTTPException(404, "No such escalation")
+    return HTMLResponse(_render_review_detail(escalation))
+
+
+@app.post("/review/{escalation_id}/resolve")
+async def review_resolve(escalation_id: str, request: Request, disposition: str = Form(...)) -> Response:
+    if not _is_reviewer(request):
+        return HTMLResponse(_render_review_login())
+    escalation = fs.get_escalation(escalation_id)
+    if escalation is None:
+        raise HTTPException(404, "No such escalation")
+    if escalation.get("status") == "resolved":
+        return HTMLResponse(_render_review_detail(escalation, message="Already resolved."))
+
+    if escalation.get("kind") == "kb_version_change":
+        resolve_kb_escalation(escalation_id, disposition=disposition, reviewer="web-review")
+    else:
+        resolve_finding_escalation(MockIssueSink(), escalation_id, disposition=disposition, reviewer="web-review")
+
+    updated = fs.get_escalation(escalation_id)
+    return HTMLResponse(_render_review_detail(updated, message=f"Marked {disposition}."))
