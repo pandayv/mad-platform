@@ -37,7 +37,7 @@ class JiraIssueSink(IssueSink):
                     "project": {"key": self.project_key},
                     "summary": title,
                     "description": description,
-                    "issuetype": {"name": "Bug"},
+                    "issuetype": {"name": "Task"},
                 }
             },
             timeout=15,

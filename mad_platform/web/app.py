@@ -30,11 +30,21 @@ from mad_platform.agents.reporter import compute_score, score_color
 from mad_platform.agents.wcag_auto_heal import resolve_kb_escalation
 from mad_platform.state import firestore_client as fs
 from mad_platform.state import storage_client
-from mad_platform.tools.issue_sink import MockIssueSink
+from mad_platform.tools.issue_sink import IssueSink, JiraIssueSink, MockIssueSink
 
 logger = logging.getLogger("mad_platform.web")
 
 app = FastAPI(title="MAD Platform")
+
+
+def _issue_sink() -> IssueSink:
+    """Real Jira when credentials are configured (Cloud Run deploys them
+    from Secret Manager); MockIssueSink otherwise, so local dev and tests
+    still run without live Jira credentials.
+    """
+    if os.environ.get("JIRA_URL"):
+        return JiraIssueSink()
+    return MockIssueSink()
 
 # scan-onboarding is deployed with --allow-unauthenticated -- a business
 # owner has to be able to just hit the URL. That means the app itself is
@@ -291,7 +301,7 @@ poll();
 
 async def _run_and_store(job_id: str, url: str) -> None:
     try:
-        result = await run_one_time_scan(url, job_id=job_id)
+        result = await run_one_time_scan(url, job_id=job_id, issue_sink=_issue_sink())
     except Exception:
         logger.exception("Scan failed for job %s (%s)", job_id, url)
         return  # run_one_time_scan already wrote status=failed to Firestore before re-raising
@@ -560,7 +570,7 @@ async def review_resolve(escalation_id: str, request: Request, disposition: str 
     if escalation.get("kind") == "kb_version_change":
         resolve_kb_escalation(escalation_id, disposition=disposition, reviewer="web-review")
     else:
-        resolve_finding_escalation(MockIssueSink(), escalation_id, disposition=disposition, reviewer="web-review")
+        resolve_finding_escalation(_issue_sink(), escalation_id, disposition=disposition, reviewer="web-review")
 
     updated = fs.get_escalation(escalation_id)
     return HTMLResponse(_render_review_detail(updated, message=f"Marked {disposition}."))

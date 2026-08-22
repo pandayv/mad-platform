@@ -128,6 +128,9 @@ it first.
 - **Web:** FastAPI — the scan-submission UI and status API
 - **Ticketing:** Jira REST API, behind an abstraction (`IssueSink`) so a
   second tracker could be added without touching Orchestrator or Reporter
+- **Notifications:** Slack, via an incoming webhook — a real-time alert
+  when a finding or a WCAG version change is escalated to a human, a
+  summary posted when a scan completes
 - **Security:** the public scan endpoint requires an access code (Secret
   Manager) and the crawler refuses to fetch private/internal network
   addresses
