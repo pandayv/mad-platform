@@ -1,11 +1,10 @@
 """Fetches the current WCAG version from the canonical W3C source.
 
-Deterministic tool, not an LLM call -- REQUIREMENTS.md section 5.3's
-"cheap periodic check of the current WCAG version" step. Parses the
-version out of the W3C WAI overview page's link to the current standard
-(e.g. href="https://www.w3.org/TR/WCAG22/") rather than free-text prose --
-that URL pattern is W3C's own stable convention for versioned
-recommendations, far less likely to drift than page copy.
+Deterministic tool, not an LLM call. Parses the version out of the W3C
+WAI overview page's link to the current standard (e.g.
+href="https://www.w3.org/TR/WCAG22/") rather than free-text prose -- that
+URL pattern is W3C's own stable convention for versioned recommendations,
+far less likely to drift than page copy.
 """
 
 from __future__ import annotations

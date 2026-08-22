@@ -1,23 +1,21 @@
 """Editor: independently verifies every finding Analyst produced.
 
-Per REQUIREMENTS.md section 5.4 step 3: dismisses false positives with a
-required written reason, assigns a validated confidence rating to what
-survives. Uses gemini-3.7-flash (the judgment-tier model, section 6.3) --
-this is exactly the kind of low-volume, high-consequence call that tier
-is reserved for.
+Dismisses false positives with a required written reason, assigns a
+validated confidence rating to what survives. Uses the higher-capability
+model tier -- this is exactly the kind of low-volume, high-consequence
+call worth spending that on.
 
-Step 3 addition: grounded against retrieved WCAG text (REQUIREMENTS.md
-section 9), not just the model's own parametric knowledge. Retrieval
-provides CANDIDATES, not a forced answer -- semantic similarity isn't
-guaranteed to surface the single best match (confirmed during testing:
-"aria-hidden on a focusable button" retrieved focus-themed criteria over
-the actually-correct 4.1.2 Name/Role/Value), so Editor reasons over what's
-retrieved rather than blindly adopting it.
+Grounded against retrieved WCAG text, not just the model's own parametric
+knowledge. Retrieval provides candidates, not a forced answer -- semantic
+similarity isn't guaranteed to surface the single best match (e.g.
+"aria-hidden on a focusable button" can retrieve focus-themed criteria
+over the actually-correct Name/Role/Value one), so Editor reasons over
+what's retrieved rather than blindly adopting it.
 
 The written rationale on every dismissal is required even though nothing
-consumes it yet -- REQUIREMENTS.md section 5.8 loop 2: it's the seed of a
-future feedback loop that tunes Analyst, so the data shape has to be
-right from day one even before the loop itself is built.
+consumes it yet -- it's the seed of a future feedback loop that could tune
+Analyst's flagging behavior from accumulated dismissal patterns, so the
+data shape needs to be right from the start even before that loop exists.
 """
 
 from __future__ import annotations

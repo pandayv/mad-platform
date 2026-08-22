@@ -1,11 +1,10 @@
 """IssueSink: the ticketing abstraction Action Agent files through.
 
-Per REQUIREMENTS.md section 5.7: "Build the filing logic behind an
-interface/abstraction so an additional tracker could be added later
-without changing Orchestrator or Reporter." JiraIssueSink is the real
-implementation; MockIssueSink lets the pipeline be tested end to end
-before real Jira credentials exist (SETUP.md item 18) -- the abstraction
-is what makes that possible without blocking on account setup.
+The filing logic sits behind this interface so an additional tracker
+could be added later without changing Orchestrator or Reporter.
+JiraIssueSink is the real implementation; MockIssueSink lets the pipeline
+be tested end to end before real Jira credentials exist -- the
+abstraction is what makes that possible without blocking on account setup.
 """
 
 from __future__ import annotations

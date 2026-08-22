@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# MAD Platform — GCP scaffolding via plain gcloud, replacing the Terraform
-# attempt. Run this in Cloud Shell (console.cloud.google.com, top-right
-# terminal icon) to avoid local auth/environment friction entirely.
+# MAD Platform — GCP scaffolding via plain gcloud. Run this in Cloud Shell
+# (console.cloud.google.com, top-right terminal icon) to avoid local
+# auth/environment friction entirely.
 #
 # Run section by section, not necessarily all at once — read each comment
-# before running that block. Placeholder container images are used for now;
-# swap in real built images once the ADK agent code exists (§7 below).
+# before running that block. Placeholder container images are used where a
+# service's real code isn't deployed yet; swap in a real built image once
+# it exists (see the bottom of this script for the actual deploy commands).
 #
-# Run gcp-cleanup.sh FIRST if you had a prior partial `terraform apply` —
-# this script assumes a clean slate for everything except Firestore, the
-# bucket, and the two pre-existing secrets referenced below.
+# Run gcp-cleanup.sh first if re-running this against a partially-set-up
+# project — this script assumes a clean slate for everything except
+# Firestore, the bucket, and the two pre-existing secrets referenced below.
 
 set -euo pipefail
 
@@ -17,11 +18,9 @@ PROJECT_ID="your-project-id-here"   # <-- EDIT THIS
 REGION="us-central1"
 PLACEHOLDER_IMAGE="us-docker.pkg.dev/cloudrun/container/hello"
 
-# These two already exist from an earlier partial `terraform apply` —
-# reusing them rather than fighting Terraform's leftover state. If you're
-# starting genuinely fresh (no prior partial apply), these won't exist yet;
-# uncomment the two `gcloud create` lines below and this block becomes a
-# real bucket/database name of your choosing instead of a reused one.
+# If these already exist in your project, reuse the names below. Starting
+# genuinely fresh: uncomment the two `gcloud create` lines below and this
+# block becomes a real bucket/database name of your choosing instead.
 FIRESTORE_DATABASE_ID="scan-firestore"
 BUCKET_NAME="scan-storage-9747"
 
@@ -47,10 +46,9 @@ echo "not the client library default — it's not named (default)."
 # gcloud storage buckets create "gs://${BUCKET_NAME}" --location="$REGION"
 echo "Using existing bucket: gs://${BUCKET_NAME}"
 
-# ── 4. Secret Manager — SKIPPED, already exist from the earlier partial
-#    apply (kept by gcp-cleanup.sh): github-webhook-secret, jira-email-secrets
-#    (one combined secret for both Jira and email creds, not split into two
-#    — matching what already exists rather than adding a third pattern).
+# ── 4. Secret Manager — SKIPPED, already exist: github-webhook-secret,
+#    jira-email-secrets (one combined secret for both Jira and email
+#    creds, not split into two).
 #    Add real values via `gcloud secrets versions add SECRET --data-file=-`
 #    (reads stdin, keeps the value out of shell history) or the Console UI.
 #    Don't put real secret values directly in this script or any file you commit.
@@ -58,8 +56,9 @@ echo "Using existing secrets: github-webhook-secret, jira-email-secrets"
 
 # ── 5. Service accounts — one identity per service (what it can READ/WRITE),
 #    plus two SEPARATE identities for who's allowed to INVOKE a service.
-#    This is the exact distinction the Terraform got wrong — don't collapse
-#    these back into one account each.
+#    Keep this distinction — collapsing invoker and resource identities
+#    into one account each reintroduces exactly the kind of circular/
+#    over-broad access this split exists to avoid.
 #    Tolerant of "already exists" (e.g. a rate limit stopped a prior run
 #    partway through) so re-running this whole script is always safe.
 for sa in scan-onboarding scan-github-trigger scan-wcag-poller scan-orchestrator scan-pubsub-invoker scan-scheduler-invoker; do
@@ -91,7 +90,7 @@ gcloud run deploy scan-onboarding \
 
 # scan-github-trigger: public (GitHub's servers must reach it), but the
 # APPLICATION verifies the webhook signature — that's the real security
-# boundary here, not Cloud Run IAM (per REQUIREMENTS.md §6.2).
+# boundary here, not Cloud Run IAM.
 gcloud run deploy scan-github-trigger \
   --image="$PLACEHOLDER_IMAGE" --region="$REGION" \
   --service-account="$SA_GITHUB" \
@@ -112,14 +111,14 @@ gcloud run deploy scan-orchestrator \
   --min-instances=0
 
 # ── 8. IAM — grant each service's OWN account only what IT needs ──────────
-# Firestore (all four need it, per the data model in REQUIREMENTS.md §8)
+# Firestore (all four services need it)
 for sa in "$SA_ONBOARDING" "$SA_GITHUB" "$SA_WCAG" "$SA_ORCH"; do
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${sa}" --role="roles/datastore.user"
 done
 
 # Pub/Sub publish — ONLY the three trigger services, and ONLY publisher,
-# never subscriber (that was the core Terraform bug)
+# never subscriber
 for sa in "$SA_ONBOARDING" "$SA_GITHUB" "$SA_WCAG"; do
   gcloud pubsub topics add-iam-policy-binding review-cycle-requests \
     --member="serviceAccount:${sa}" --role="roles/pubsub.publisher"
@@ -131,8 +130,7 @@ for sa in "$SA_WCAG" "$SA_ORCH"; do
     --member="serviceAccount:${sa}" --role="roles/aiplatform.user"
 done
 
-# Secrets — scoped to the SPECIFIC secret, not project-wide (the other gap
-# from the Terraform review)
+# Secrets — scoped to the SPECIFIC secret, not project-wide
 gcloud secrets add-iam-policy-binding github-webhook-secret \
   --member="serviceAccount:${SA_GITHUB}" --role="roles/secretmanager.secretAccessor"
 gcloud secrets add-iam-policy-binding jira-email-secrets \
@@ -142,15 +140,14 @@ gcloud secrets add-iam-policy-binding jira-email-secrets \
 gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
   --member="serviceAccount:${SA_ORCH}" --role="roles/storage.objectAdmin"
 
-# ── 8b. Platform UI widening (added 2026-08-21) — a DELIBERATE, DISCLOSED
-#    deviation from the isolation above. mad_platform/web/app.py runs the
-#    *entire* pipeline (not just publish-and-hand-off) directly inside
-#    scan-onboarding, as REQUIREMENTS.md §9's "simulate onboarding with a
-#    manual trigger" allowance — so scan-onboarding-sa needs everything
-#    scan-orchestrator-sa has, not just Firestore+publish. Revisit before
-#    final submission: the production shape should keep onboarding
-#    publish-only and let scan-orchestrator do the actual work via Pub/Sub,
-#    same as the rest of this script assumes.
+# ── 8b. Platform UI widening — a deliberate deviation from the isolation
+#    above. mad_platform/web/app.py runs the *entire* pipeline (not just
+#    publish-and-hand-off) directly inside scan-onboarding, so
+#    scan-onboarding-sa needs everything scan-orchestrator-sa has, not
+#    just Firestore+publish. Revisit before final production use: the
+#    long-term shape should keep onboarding publish-only and let
+#    scan-orchestrator do the actual work via Pub/Sub, same as the rest of
+#    this script assumes.
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${SA_ONBOARDING}" --role="roles/aiplatform.user"
 gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
@@ -158,7 +155,7 @@ gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
 
 # mad-ui-access-code — the ONLY thing standing between scan-onboarding's
 # --allow-unauthenticated endpoint and someone using it as a free
-# Gemini-calling, Playwright-fetching open relay (REQUIREMENTS.md §6.2).
+# Gemini-calling, Playwright-fetching open relay.
 # Create the secret's first version manually before running this (its
 # value must never be committed):
 #   openssl rand -hex 12 | gcloud secrets create mad-ui-access-code --data-file=-
@@ -167,7 +164,6 @@ gcloud secrets add-iam-policy-binding mad-ui-access-code \
 
 # Cloud Build needs its own permissions to build/push the Platform UI image
 # and deploy it — separate from the app's own service accounts above.
-# Discovered by hitting each gap directly during the first real deploy.
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
 COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
@@ -181,8 +177,8 @@ gcloud artifacts repositories add-iam-policy-binding mad-platform \
   --member="serviceAccount:${COMPUTE_SA}" --role="roles/artifactregistry.writer"
 
 # ── 9. Invocation IAM — dedicated identities invoke, NOT the target's own
-#    service account. This is the fix for the circular pattern in the
-#    Terraform (Orchestrator authenticating a push subscription as itself).
+#    service account. Avoids the circular pattern of a service
+#    authenticating a push subscription to itself.
 gcloud run services add-iam-policy-binding scan-orchestrator --region="$REGION" \
   --member="serviceAccount:${SA_PUBSUB_INVOKER}" --role="roles/run.invoker"
 gcloud run services add-iam-policy-binding scan-wcag-poller --region="$REGION" \
@@ -225,8 +221,8 @@ gcloud scheduler jobs create http scan-wcag-poller-tick \
   || echo "skipped (already exists): scan-wcag-poller-tick"
 
 echo "Scaffolding complete. scan-onboarding is running the real Platform UI"
-echo "image (deployed 2026-08-21, see below) — the other three services are"
-echo "still on the placeholder image, redeploy each once their code exists:"
+echo "image (see below) — the other three services are still on the"
+echo "placeholder image, redeploy each once their code exists:"
 echo '  gcloud builds submit --tag=us-central1-docker.pkg.dev/'"$PROJECT_ID"'/mad-platform/SERVICE:latest .'
 echo '  gcloud run deploy SERVICE --image=us-central1-docker.pkg.dev/'"$PROJECT_ID"'/mad-platform/SERVICE:latest --region='"$REGION"
 echo ""

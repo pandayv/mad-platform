@@ -1,19 +1,18 @@
 """Action Agent: files tickets, idempotently, and routes escalations.
 
-Per REQUIREMENTS.md section 5.6 and 5.7:
 - Escalation is a single gate applied once: low Editor confidence OR high
   severity (either alone is sufficient) sends a finding to the SME queue.
 - Non-escalated findings are fully autonomous -- ticket filed immediately,
-  no human step. Escalated findings WAIT: no ticket exists until SME
-  confirms, per section 5.6 ("Dismiss -> never becomes a ticket, never
-  appears in the report") -- this is not act-then-flag for the escalated
-  subset, only for the majority that clears the gate.
-- Idempotency (Guiding Principle 3): a deterministic key per finding
-  means a retried call never double-files.
+  no human step. Escalated findings wait: no ticket exists until SME
+  confirms it ("dismiss" never becomes a ticket, never appears in the
+  report) -- this is not act-then-flag for the escalated subset, only for
+  the majority that clears the gate.
+- Idempotency: a deterministic key per finding means a retried call never
+  double-files.
 
-Tool, not an agent -- REQUIREMENTS.md section 5.4 step 7: the judgment
-already happened upstream (Editor's confidence, Reporter's severity), this
-is deterministic routing and API calls, no LLM judgment of its own.
+Tool, not an agent -- the judgment already happened upstream (Editor's
+confidence, Reporter's severity), this is deterministic routing and API
+calls, no LLM judgment of its own.
 """
 
 from __future__ import annotations

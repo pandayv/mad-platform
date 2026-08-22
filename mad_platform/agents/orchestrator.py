@@ -1,15 +1,14 @@
 """Orchestrator: picks pages, sequences the cycle, checkpoints progress.
 
-Per REQUIREMENTS.md section 5.4 step 1 and Guiding Principle 1: page
-selection is the dynamic, LLM-driven judgment point -- not exhaustive
+Page selection is the dynamic, LLM-driven judgment point -- not exhaustive
 crawling, not a fixed list, an actual decision grounded in what's on the
 entry page. Everything after that is deterministic sequencing.
 
-Resumability (Guiding Principle 2): a page already checkpointed all the
-way to "verified" is skipped entirely on resume, not redone. A page
-interrupted partway through is redone from its crawl -- crawling is cheap
-and idempotent, so this is a deliberate, disclosed scope decision rather
-than persisting large intermediate finding blobs just to save one re-crawl.
+A page already checkpointed all the way to "verified" is skipped entirely
+on resume, not redone. A page interrupted partway through is redone from
+its crawl -- crawling is cheap and idempotent, so re-fetching costs far
+less than persisting large intermediate finding blobs just to save one
+re-crawl.
 """
 
 from __future__ import annotations
@@ -57,10 +56,10 @@ Return the paths you selected (not full URLs) and a short reasoning.
 def _normalize_path(path: str) -> str:
     """Empty path (a bare "https://example.com" entry URL) and "/" are the
     same page -- treat them identically everywhere paths get compared.
-    Caught for real: without this, a nav link back to "/" on the entry
-    page got treated as a distinct candidate from the entry URL itself,
-    causing the same page to be crawled and analyzed twice under two URL
-    forms, duplicating every finding on it in the final report.
+    Without this, a nav link back to "/" on the entry page is treated as a
+    distinct candidate from the entry URL itself, causing the same page to
+    be crawled and analyzed twice under two URL forms, duplicating every
+    finding on it in the final report.
     """
     return path or "/"
 
@@ -185,10 +184,8 @@ async def _process_page(job_id: str, url: str) -> list[VerifiedFinding]:
 def _findings_from_stored(stored: list[dict]) -> list[VerifiedFinding]:
     """Firestore stores verified findings as plain dicts (plus a "raw"
     field checkpoint_page_verified adds) -- converts back to VerifiedFinding
-    so resumed results are the same type as freshly-produced ones. This was
-    a real, previously-undetected gap: nothing downstream consumed a
-    resumed job's results type-strictly until Reporter/Action Agent were
-    wired in below, so the mismatch never surfaced in testing before now.
+    so resumed results are the same type as freshly-produced ones, since
+    Reporter and Action Agent downstream expect that type strictly.
     """
     return [VerifiedFinding(**{k: v for k, v in d.items() if k != "raw"}) for d in stored]
 
@@ -211,8 +208,8 @@ async def run_one_time_scan(
     """The full core, end to end: site -> findings -> recommendations ->
     report -> escalation. Pass an existing job_id to resume it -- pages
     already fully verified are skipped, everything else is (re)run from
-    its crawl. issue_sink defaults to a mock (real Jira credentials are a
-    separate setup step, SETUP.md item 18, not a code dependency).
+    its crawl. issue_sink defaults to a mock ticket sink so this runs
+    without real ticketing credentials configured.
     """
     issue_sink = issue_sink or MockIssueSink()
     existing_job = fs.get_job(job_id) if job_id else None

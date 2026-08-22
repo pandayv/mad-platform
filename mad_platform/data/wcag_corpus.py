@@ -1,12 +1,10 @@
 """A curated subset of WCAG 2.2 success criteria -- the highest-value,
 most legally-relevant ones, not exhaustive coverage of all ~90.
 
-Per PLAN.md's own MVP guidance: "don't try to cover the full WCAG spec --
-pick the highest-value, most legally-relevant subset." This set covers
-what Analyst's rule/AI checks actually target, plus a handful of other
-criteria commonly cited in real accessibility litigation, so Editor and
-Reporter have real grounding material to retrieve against rather than a
-token one-criterion demo.
+This set covers what Analyst's rule/AI checks actually target, plus a
+handful of other criteria commonly cited in real accessibility
+litigation, so Editor and Reporter have real grounding material to
+retrieve against rather than a token one-criterion demo.
 
 Descriptions here are accurate factual summaries of the standard, not
 verbatim W3C text -- this is a working knowledge base, not a copy of the

@@ -1,14 +1,11 @@
 """Persists the generated report to Cloud Storage.
 
-Per REQUIREMENTS.md section 7 -- "generated report artifacts" was always
-part of the stated architecture for this bucket, it just hadn't been
-wired up yet. Kept private (no public read access) -- these are real
-findings about a specific site's compliance gaps, not something to expose
-by default. Access for now is the Cloud Console browser link below, which
-works for anyone with viewer access on the project (i.e. us, right now);
-a real "email this to the site owner" flow would need signed URLs instead,
-which need a service account key or IAM SignBlob permission we don't have
-configured yet -- a disclosed gap, not solved here.
+Kept private (no public read access) -- these are real findings about a
+specific site's compliance gaps, not something to expose by default.
+Access for now is the Cloud Console browser link below, which works for
+anyone with viewer access on the project; a real "email this to the site
+owner" flow would need signed URLs instead, which need a service account
+key or IAM SignBlob permission not yet configured.
 """
 
 from __future__ import annotations

@@ -1,11 +1,10 @@
 """Analyst: checks one page for accessibility violations.
 
-Per REQUIREMENTS.md section 5.4 step 2 and Guiding Principle 1 -- the rule
-checks and the two AI-assisted checks are independent, order-irrelevant
-work, so they run in PARALLEL, not sequentially. This is a deliberate
-orchestration-pattern choice, not an implementation detail: there's no
-reason to check contrast after checking alt text, or to wait for the
-visual check before running the semantic one.
+The rule checks and the two AI-assisted checks are independent,
+order-irrelevant work, so they run in parallel, not sequentially -- a
+deliberate orchestration-pattern choice, not an implementation detail:
+there's no reason to check contrast after checking alt text, or to wait
+for the visual check before running the semantic one.
 """
 
 from __future__ import annotations

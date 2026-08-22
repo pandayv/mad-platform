@@ -1,14 +1,13 @@
 """ScanJob checkpointing in Firestore.
 
-This is Guiding Principle 2 made real, not just claimed: each stage writes
-its completion to the job record as it finishes. On restart, a caller
-reads the last completed checkpoint per page and resumes from the next
-incomplete stage -- it never blindly re-runs a job from scratch.
+Each stage writes its completion to the job record as it finishes. On
+restart, a caller reads the last completed checkpoint per page and
+resumes from the next incomplete stage -- it never blindly re-runs a job
+from scratch.
 
-Database is 'scan-firestore', not '(default)' -- see SETUP.md item 14 and
-REQUIREMENTS.md section 7. This is a real, easy-to-miss gotcha: forgetting
-the database= argument silently connects to a database that doesn't
-have any of this project's data.
+Database is 'scan-firestore', not '(default)' -- an easy-to-miss gotcha:
+forgetting the database= argument silently connects to a database that
+doesn't have any of this project's data.
 """
 
 from __future__ import annotations
@@ -26,8 +25,8 @@ _DATABASE = "scan-firestore"
 _client = firestore.Client(project=_PROJECT, database=_DATABASE)
 _JOBS = _client.collection("scan_jobs")
 _TICKETS = _client.collection("filed_tickets")  # idempotency_key -> ticket_id
-_ESCALATIONS = _client.collection("escalations")  # SME queue, per REQUIREMENTS.md section 5.6
-_KB_VERSION = _client.collection("knowledge_base_version").document("wcag")  # REQUIREMENTS.md section 8
+_ESCALATIONS = _client.collection("escalations")  # SME review queue
+_KB_VERSION = _client.collection("knowledge_base_version").document("wcag")
 
 # Stages, in order -- used to answer "what's the next incomplete stage".
 PAGE_STAGES = ["crawled", "analyzed", "verified"]
@@ -73,10 +72,9 @@ def checkpoint_page_analyzed(job_id: str, page_url: str, raw_finding_count: int)
 
 
 def checkpoint_page_retry(job_id: str, page_url: str, reason: str) -> None:
-    """Records that the bounded retry gate (REQUIREMENTS.md section 5.4
-    step 4) sent this page back for one more pass, and why. No "stage"
-    field here on purpose -- this doesn't move the page forward, it just
-    makes the decision auditable.
+    """Records that the bounded retry gate sent this page back for one
+    more pass, and why. No "stage" field here on purpose -- this doesn't
+    move the page forward, it just makes the decision auditable.
     """
     _set_page_field(job_id, page_url, {"retried": True, "retry_reason": reason})
 
@@ -119,7 +117,7 @@ def fail_job(job_id: str, error: str) -> None:
 
 def get_ticket_for_finding(idempotency_key: str) -> str | None:
     """Checks whether a finding has already been filed -- the idempotency
-    guard from REQUIREMENTS.md section 5.4 step 7 and Guiding Principle 3.
+    guard that keeps a retried pipeline step from double-filing.
     """
     doc = _TICKETS.document(idempotency_key).get()
     return doc.to_dict()["ticket_id"] if doc.exists else None
@@ -133,8 +131,8 @@ def record_ticket_for_finding(idempotency_key: str, ticket_id: str) -> None:
 
 def create_escalation(idempotency_key: str, finding_data: dict) -> str:
     """Adds a finding to the SME queue -- no ticket is filed for it until
-    resolved, per REQUIREMENTS.md section 5.6: escalated findings wait,
-    they don't act-then-flag like the non-escalated majority.
+    resolved. Escalated findings wait; they don't act-then-flag like the
+    non-escalated majority.
     """
     doc_ref = _ESCALATIONS.document(idempotency_key)
     doc_ref.set(
@@ -190,9 +188,8 @@ def touch_kb_check(checked_version: str) -> None:
 
 
 def set_kb_version(version: str) -> None:
-    """Called after a successful refresh (auto or SME-confirmed) -- this is
-    the "embedding version reference" REQUIREMENTS.md section 8 calls for,
-    i.e. which version the currently-stored embeddings actually reflect.
+    """Called after a successful refresh (auto or SME-confirmed) -- records
+    which version the currently-stored embeddings actually reflect.
     """
     _KB_VERSION.set({"version": version, "updated_at": datetime.now(timezone.utc)}, merge=True)
 
@@ -203,8 +200,7 @@ def _set_page_field(job_id: str, page_url: str, fields: dict) -> None:
     a whole-object replace, so writing {"stage": "crawled"} onto a page
     already at "verified" would otherwise silently downgrade it -- exactly
     the kind of bug that defeats resumability while looking correct at a
-    glance. Caught this for real: an unconditional entry-page checkpoint
-    was doing exactly this and causing full reprocessing on every "resume".
+    glance, causing full reprocessing on every "resume" instead of none.
     """
     new_stage = fields.get("stage")
     if new_stage in PAGE_STAGES:

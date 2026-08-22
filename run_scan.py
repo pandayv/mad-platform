@@ -1,14 +1,13 @@
-"""Manual CLI entry point for testing the full core (Steps 1-4) yourself.
+"""Manual CLI entry point for running a scan directly, without the web UI.
 
 Usage:
     .venv/bin/python run_scan.py https://example.com
     .venv/bin/python run_scan.py https://example.com --job-id <existing-job-id>   # resume
 
-No frontend exists yet -- this is the way to exercise the real pipeline
-(Orchestrator -> Analyst -> Editor -> Reporter -> Action Agent, with
-Firestore checkpointing) until there is one. Files tickets against a
-MockIssueSink by default -- real Jira credentials are a separate setup
-step (SETUP.md item 18), not required to run this.
+Exercises the real pipeline (Orchestrator -> Analyst -> Editor -> Reporter
+-> Action Agent, with Firestore checkpointing) directly from the
+terminal. Files tickets against a MockIssueSink by default -- real Jira
+credentials aren't required to run this.
 """
 
 from __future__ import annotations

@@ -1,18 +1,14 @@
-"""WCAG auto-heal: Platform's freshness-check + refresh loop for the shared
-knowledge base (REQUIREMENTS.md section 5.3; the first of the three
-feedback loops named in section 5.8 -- tunes the system's knowledge, not
-its judgment).
+"""WCAG auto-heal: freshness-check + refresh loop for the shared knowledge
+base. Tunes the system's knowledge, not its judgment.
 
 Scope, deliberately: this detects a version change and decides whether to
-auto-refresh or escalate for human review -- it does NOT dynamically fetch
+auto-refresh or escalate for human review -- it does not dynamically fetch
 and ingest new WCAG success-criteria text from W3C. Full WCAG spec
-coverage is an explicit non-goal (REQUIREMENTS.md section 2); "refresh"
-here means re-embedding the existing curated corpus
-(mad_platform/data/wcag_corpus.py) and updating the stored version
-pointer. That demonstrates the real decision mechanism -- detect, classify,
-auto-act or escalate, per Guiding Principle 3 -- without pretending to
-keep pace with the full spec's content, which is a much bigger and
-explicitly out-of-scope problem.
+coverage is intentionally out of scope; "refresh" here means re-embedding
+the existing curated corpus (mad_platform/data/wcag_corpus.py) and
+updating the stored version pointer. That demonstrates the real decision
+mechanism -- detect, classify, auto-act or escalate -- without pretending
+to keep pace with the full spec's content, which is a much bigger problem.
 
 Minor-vs-major classification leans on the model's own general knowledge
 of WCAG's versioning history (2.0 -> 2.1 -> 2.2 are documented, publicly
@@ -62,7 +58,7 @@ def classify_version_change(old_version: str, new_version: str) -> _VersionChang
 
 
 def run_wcag_freshness_check(simulate_current_version: str | None = None) -> dict:
-    """The Platform's scheduled tick (REQUIREMENTS.md section 5.2/5.3).
+    """The scheduled freshness-check tick.
 
     simulate_current_version overrides the real W3C fetch -- demo/test
     only (see check_wcag_version.py --simulate). A real WCAG version
@@ -83,7 +79,7 @@ def run_wcag_freshness_check(simulate_current_version: str | None = None) -> dic
     if stored_version is None:
         # First run ever -- nothing to compare against yet, just record it.
         # embed_and_store_corpus() is assumed to have already been run once
-        # during setup (SETUP.md) to seed the embeddings themselves.
+        # during setup to seed the embeddings themselves.
         fs.set_kb_version(current_version)
         return {"action": "initialized", "version": current_version}
 

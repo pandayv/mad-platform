@@ -1,18 +1,17 @@
 """AI-assisted Analyst checks -- catches what static rule checks can't.
 
-Per REQUIREMENTS.md section 5.4 step 2: visual review of the screenshot
-(is alt text actually descriptive, are focus indicators visible, is there
-a contrast issue static analysis missed) and semantic review of
-accessible-name content.
+Visual review of the screenshot (is alt text actually descriptive, are
+focus indicators visible, is there a contrast issue static analysis
+missed) and semantic review of accessible-name content.
 
-No RAG grounding yet -- that's Step 3 (REQUIREMENTS.md section 9), which
-upgrades these citations from the model's parametric knowledge to
-retrieval-grounded ones. Flagged here as a known, disclosed gap, not a
-silent one.
+These citations come from the model's own knowledge, not retrieval-
+grounded lookup -- Editor is what grounds the final citation against the
+WCAG knowledge base, so an ungrounded guess here is fine as a starting
+point.
 
-Analyst is deliberately high recall (Guiding Principle 4): the prompts
-below explicitly instruct erring toward flagging borderline cases --
-Editor is the precision filter, not this layer.
+Analyst is deliberately high recall: the prompts below explicitly
+instruct erring toward flagging borderline cases -- Editor is the
+precision filter, not this layer.
 """
 
 from __future__ import annotations

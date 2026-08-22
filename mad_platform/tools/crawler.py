@@ -1,7 +1,7 @@
 """Crawler tool: fetches a page and captures its rendered HTML + a screenshot.
 
-Deterministic tool, not an LLM agent — Analyst calls this directly
-(REQUIREMENTS.md §5.4 step 2). No judgment happens here.
+Deterministic tool, not an LLM agent — Analyst calls this directly. No
+judgment happens here.
 """
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ from playwright.async_api import async_playwright
 class UnsafeTargetError(Exception):
     """Raised when a URL resolves to a private/link-local/metadata address.
 
-    This is the SSRF guard from REQUIREMENTS.md §6.2 — the crawler accepts
-    an arbitrary user-supplied URL, so it must refuse to fetch internal
-    infrastructure regardless of what the caller intended.
+    SSRF guard — the crawler accepts an arbitrary user-supplied URL, so it
+    must refuse to fetch internal infrastructure regardless of what the
+    caller intended.
     """
 
 
@@ -114,8 +114,8 @@ async def fetch_page(url: str, timeout_ms: int = 15000, retries: int = 2) -> Pag
     """Render a page with a real browser and capture its HTML + a full-page screenshot.
 
     Retries transient failures (timeout, navigation errors) with a short
-    backoff, per REQUIREMENTS.md §6.1 — a single flaky load must not fail
-    the whole page, let alone the whole cycle.
+    backoff — a single flaky load must not fail the whole page, let alone
+    the whole cycle.
     """
     _assert_safe_target(url)
 

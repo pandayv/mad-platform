@@ -1,17 +1,15 @@
-"""Platform UI: a minimal web front end over the four-lens core.
+"""Platform UI: a minimal web front end over the scan pipeline.
 
-Per PLAN.md's revised step 5 -- a submission form + a polling status page,
-meant to run on the already-provisioned scan-onboarding Cloud Run service.
-This is the "manual trigger" onboarding REQUIREMENTS.md section 9
-explicitly sanctions as sufficient for now; recurring/event-driven
-triggers (GitHub webhook, Scheduler) are a separate, lower-priority item,
-not built here.
+A submission form plus a polling status page, running on the
+scan-onboarding Cloud Run service. On-demand, manual scans only --
+recurring/event-driven triggers (GitHub webhook, Scheduler) are a
+separate, not-yet-built layer.
 
 A scan takes 30-90s -- too long for one synchronous request -- so
 POST /scan fires the pipeline as a background asyncio task and redirects
 immediately to a status page that polls Firestore (which the pipeline
 already checkpoints to) every couple of seconds. No new agent logic, no
-new datastore -- this is a thin view over what steps 1-4 already write.
+new datastore -- this is a thin view over what the pipeline already writes.
 
 Run locally: .venv/bin/uvicorn mad_platform.web.app:app --reload --port 8080
 """
@@ -35,13 +33,12 @@ logger = logging.getLogger("mad_platform.web")
 
 app = FastAPI(title="MAD Platform")
 
-# scan-onboarding is deployed with --allow-unauthenticated (per gcp-deploy.sh
-# -- a business owner has to be able to just hit the URL). That means the
-# app itself is the only thing standing between this endpoint and someone
-# using it as a free Gemini-calling, Playwright-fetching open relay --
-# exactly the risk REQUIREMENTS.md section 6.2 names. If MAD_ACCESS_CODE is
-# set (Cloud Run deploys it from Secret Manager), a scan requires it; if
-# unset (local dev), the gate is open.
+# scan-onboarding is deployed with --allow-unauthenticated -- a business
+# owner has to be able to just hit the URL. That means the app itself is
+# the only thing standing between this endpoint and someone using it as a
+# free Gemini-calling, Playwright-fetching open relay. If MAD_ACCESS_CODE
+# is set (Cloud Run deploys it from Secret Manager), a scan requires it;
+# if unset (local dev), the gate is open.
 _ACCESS_CODE = os.environ.get("MAD_ACCESS_CODE")
 
 _BASE_STYLE = """

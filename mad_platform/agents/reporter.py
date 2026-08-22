@@ -1,24 +1,18 @@
 """Reporter: ranks confirmed findings by real-world risk, recommends fixes,
 and drafts the report.
 
-Step 2 (findings -> recommendations): rank_and_recommend.
-Step 3 (recommendations -> report): draft_report, per REQUIREMENTS.md
-section 5.5 -- one FIXED template, not freshly generated structure per
-run. The only genuinely LLM-appropriate part of the report itself is the
-short executive summary; everything else is templated data fill, same
-"code does the mechanical part, model does the judgment" split used
-throughout. Jira ticket IDs are left as placeholders here -- Action Agent
-(Step 4) fills those in, not built yet.
+rank_and_recommend ranks by WCAG conformance level, real-world litigation
+pattern frequency, and estimated user impact -- not raw technical severity
+alone. The LLM assigns a risk score per finding; sorting by that score is
+deterministic Python, not another judgment call -- code handles the
+mechanical part, the model handles the actual judgment.
 
-Per REQUIREMENTS.md section 5.4 step 5: ranks by WCAG conformance level,
-real-world litigation pattern frequency, and estimated user impact -- not
-raw technical severity alone. The LLM assigns a risk score per finding;
-sorting by that score is deterministic Python, not another judgment call --
-consistent with keeping code responsible for the mechanical part and the
-model responsible for the actual judgment.
+draft_report renders one fixed template, not a freshly generated structure
+per run. The only genuinely LLM-appropriate part of the report itself is
+the short executive summary; everything else is templated data fill.
 
-Uses gemini-3.7-flash (the judgment tier, section 6.3) -- Reporter's
-ranking/synthesis is explicitly one of the calls that tier is reserved for.
+Uses the higher-capability model tier -- ranking/synthesis is a judgment
+call worth spending that on, unlike the high-volume per-page checks.
 """
 
 from __future__ import annotations
@@ -340,8 +334,8 @@ def draft_report(
     """The fixed report template -- same structure every run, only the data
     changes. Single format (HTML): easiest to generate reliably, opens
     anywhere, and is the one genuinely user-friendly format a business
-    owner would actually read (per REQUIREMENTS.md section 5.5 -- template
-    is fixed, only the executive summary is LLM-generated).
+    owner would actually read. The template itself is fixed; only the
+    executive summary is LLM-generated.
     """
     ticket_by_finding = ticket_by_finding or {}
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")

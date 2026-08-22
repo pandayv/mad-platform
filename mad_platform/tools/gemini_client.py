@@ -1,12 +1,13 @@
 """Thin wrapper around Vertex AI's Gemini client.
 
-location='global' is required, not 'us-central1' -- confirmed 2026-08-21
-(see REQUIREMENTS.md section 7): models appear in the regional catalog
-listing but 404 when actually called there.
+location='global' is required, not a specific region like 'us-central1':
+some models appear in a region's catalog listing but 404 when actually
+called there.
 
 gemini-3.5-flash-lite for high-volume calls, gemini-3.7-flash for the
-handful of judgment calls -- per REQUIREMENTS.md section 6.3. There is no
-Pro-tier model at the "Gemini 3.5+" floor this project is required to use.
+handful of judgment calls. No Pro-tier model exists at the "Gemini 3.5+"
+floor this project targets, so the tiering is Flash-lite vs. Flash rather
+than the more typical Flash-vs-Pro split.
 """
 
 from __future__ import annotations
@@ -23,19 +24,13 @@ FLASH_LITE = "gemini-3.5-flash-lite"
 FLASH = "gemini-3.7-flash"
 EMBEDDING_MODEL = "gemini-embedding-001"
 
-# Caught for real: a single Vertex AI call hung indefinitely in production
-# (select_pages, right after the entry-page crawl) with no timeout and no
-# error -- the background task just sat there forever, invisible to the
-# job's status (Firestore never got another checkpoint, and nothing raised
-# for fs.fail_job to catch). The SDK's own default is no timeout at all.
-#
-# 30s was the first value tried; caught for real a second time against the
-# demo site (22 findings across 3 pages): Reporter's ranking call processes
-# every confirmed finding in one prompt and returns a bigger structured
-# response than a small call like select_pages, and legitimately needs more
-# than 30s once there are more than a handful of findings. Raised to 60s --
-# still bounded (worst case ~2min with the one retry below), just sized for
-# the biggest real call this pipeline makes rather than the smallest.
+# The SDK's own default is no timeout at all, so a single stalled call can
+# hang a background task indefinitely with no error and no way for a
+# caller to detect or recover from it. 60s is sized for the largest real
+# call this pipeline makes (Reporter's ranking call, which processes every
+# confirmed finding in one prompt) rather than the smallest -- still
+# bounded (worst case ~2min with the one retry below), just not so tight
+# that a legitimately larger request gets killed early.
 _TIMEOUT_MS = 60_000
 _MAX_ATTEMPTS = 2
 
@@ -73,7 +68,7 @@ def generate_structured(
 ) -> T:
     """One structured-output Gemini call. Raises on malformed responses
     rather than returning something a caller might silently misuse --
-    per REQUIREMENTS.md section 6.1, every LLM call must be schema-validated.
+    every LLM call in this pipeline is schema-validated, not free text.
     """
     parts: list = []
     if image_bytes:

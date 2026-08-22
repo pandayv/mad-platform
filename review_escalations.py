@@ -1,7 +1,6 @@
-"""SME review queue -- CLI stand-in for the internal tool described in
-REQUIREMENTS.md section 5.6 (not Jira, not email -- an internal-only
-surface, since this is AccessScout's own quality control, not something
-handed to the customer).
+"""SME review queue -- CLI stand-in for the internal review tool (not
+Jira, not email -- an internal-only surface, since this is MAD
+Platform's own quality control, not something handed to the customer).
 
 Usage:
     .venv/bin/python review_escalations.py --list
@@ -20,10 +19,10 @@ from mad_platform.tools.issue_sink import MockIssueSink
 
 
 def list_pending() -> None:
-    """Two kinds of escalation share this one queue -- a finding routed by
-    the section 5.6 gate, or a WCAG version change routed by the auto-heal
-    loop's minor/major classification (Guiding Principle 3). Same
-    human-approval mechanism, two different judgment calls behind it.
+    """Two kinds of escalation share this one queue -- a low-confidence or
+    critical finding, or a WCAG version change the auto-heal loop couldn't
+    confidently classify as minor. Same human-approval mechanism, two
+    different judgment calls behind it.
     """
     pending = fs.list_pending_escalations()
     if not pending:
@@ -36,12 +35,12 @@ def list_pending() -> None:
             print(f"  Type: WCAG knowledge-base version change")
             print(f"  {e['old_version']} -> {e['new_version']}  (classified: {e['change_type']}, confidence={e['confidence']:.2f})")
             print(f"  Reasoning: {e['reasoning']}")
-            print(f"  Why flagged: not a confident 'minor' classification -- needs review before re-embedding (Guiding Principle 3)")
+            print(f"  Why flagged: not a confident 'minor' classification -- needs review before re-embedding")
         else:
             print(f"  Page: {e['page_url']}")
             print(f"  WCAG {e['wcag_criterion']}  severity={e['severity']}  confidence={e['editor_confidence']:.2f}")
             print(f"  Evidence: {e['editor_rationale']}")
-            print(f"  Why flagged: low confidence and/or critical severity (REQUIREMENTS.md section 5.6)")
+            print(f"  Why flagged: low confidence and/or critical severity")
         print()
 
 
@@ -59,7 +58,7 @@ def resolve(escalation_id: str, disposition: str) -> None:
             print(f"Dismissed. Knowledge base stays on its current version -- corpus needs a real content update first.")
         return
 
-    sink = MockIssueSink()  # real Jira credentials: SETUP.md item 18
+    sink = MockIssueSink()  # real Jira credentials not yet configured
     ticket = resolve_escalation(sink, escalation_id, disposition=disposition, reviewer="cli-review")
     if disposition == "confirm":
         print(f"Confirmed. Ticket filed: {ticket}")

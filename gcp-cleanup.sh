@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cleanup for the tangled partial-Terraform-apply state — run this BEFORE
+# Cleanup for a partially-set-up project state — run this BEFORE
 # gcp-deploy.sh. Deletes the Cloud Run services, Pub/Sub topics/subscriptions,
 # the eight dedicated (non-generic) service accounts, and the duplicate
 # "-9747" secrets. Leaves untouched: Firestore (scan-firestore), the bucket

@@ -1,7 +1,6 @@
 """HTTP entrypoint for scan-wcag-poller. Cloud Scheduler hits this on a
-tick (gcp-deploy.sh section 11) -- not a human. NOT --allow-unauthenticated,
-only the Scheduler's dedicated invoker identity can reach it
-(REQUIREMENTS.md section 7.1), unlike scan-onboarding.
+tick -- not a human. Not publicly reachable like scan-onboarding is; only
+the Scheduler's dedicated invoker identity can call it.
 """
 
 from __future__ import annotations

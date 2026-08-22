@@ -1,15 +1,13 @@
 """Deterministic WCAG rule checks — the non-LLM half of Analyst.
 
-Per REQUIREMENTS.md §5.4 step 2: missing/empty alt text, contrast ratios,
-heading hierarchy, form label association, ARIA attribute misuse,
-tab-order heuristics. These are plain functions, not agent/tool-call
-overhead — there's no judgment here, just code that either finds a
-violation or doesn't.
+Missing/empty alt text, contrast ratios, heading hierarchy, form label
+association, ARIA attribute misuse, tab-order heuristics. These are plain
+functions, not agent/tool-call overhead — there's no judgment here, just
+code that either finds a violation or doesn't.
 
-Analyst is deliberately tuned high-recall (REQUIREMENTS.md §5.4 step 2,
-Guiding Principle 4): these checks lean toward flagging borderline cases
-rather than staying silent. Editor is what filters false positives later,
-not this layer.
+Analyst is deliberately tuned high-recall: these checks lean toward
+flagging borderline cases rather than staying silent. Editor is what
+filters false positives later, not this layer.
 """
 
 from __future__ import annotations

@@ -1,18 +1,14 @@
-"""Minimal static RAG over the WCAG corpus -- Step 3's grounding layer.
+"""Minimal RAG over the WCAG corpus -- grounds citations against the real
+standard instead of the model's unaided claim. Freshness/refresh logic
+lives separately in wcag_auto_heal.py; this module only embeds and
+retrieves.
 
-Per REQUIREMENTS.md section 5.3's phasing note: the core ships with a
-static version of this (embed once, retrieve for citations, no
-freshness-checking). The full auto-refreshing knowledge base is a
-robustness-pass upgrade, not built here.
-
-Storage is Firestore (matches the stated architecture -- "WCAG
-knowledge-base embeddings" in the datastore, REQUIREMENTS.md section 7),
-not a dedicated vector database, since the corpus is small (~18 curated
-criteria) and mostly static -- consistent with the official cost guidance
-to avoid dedicated always-on vector infrastructure for a corpus this size.
-Retrieval caches the embedded corpus in memory after first load rather
-than re-fetching from Firestore on every call -- an implementation detail,
-not a deviation from Firestore being the durable source of truth.
+Storage is Firestore, not a dedicated vector database, since the corpus is
+small (~18 curated criteria) and mostly static -- a dedicated always-on
+vector index isn't justified at this size. Retrieval caches the embedded
+corpus in memory after first load rather than re-fetching from Firestore
+on every call -- an implementation detail, not a deviation from Firestore
+being the durable source of truth.
 """
 
 from __future__ import annotations
