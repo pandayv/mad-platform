@@ -33,6 +33,7 @@ def _post(payload: dict) -> None:
     try:
         resp = requests.post(webhook_url, json=payload, timeout=_TIMEOUT_S)
         resp.raise_for_status()
+        logger.info("Slack notification posted")
     except Exception:
         logger.exception("Slack notification failed")
 

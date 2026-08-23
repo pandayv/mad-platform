@@ -34,6 +34,7 @@ from mad_platform.state import storage_client
 from mad_platform.tools.issue_sink import IssueSink, JiraIssueSink, MockIssueSink
 from mad_platform.web import theme
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mad_platform.web")
 
 app = FastAPI(title="MAD Platform")

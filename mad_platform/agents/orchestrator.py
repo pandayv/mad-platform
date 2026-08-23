@@ -13,6 +13,7 @@ re-crawl.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlparse
@@ -31,6 +32,8 @@ from mad_platform.tools.adk_client import generate_structured
 from mad_platform.tools.crawler import PageSnapshot, fetch_page
 from mad_platform.tools.gemini_client import FLASH, FLASH_LITE
 from mad_platform.tools.issue_sink import IssueSink, MockIssueSink
+
+logger = logging.getLogger("mad_platform.orchestrator")
 
 MAX_ADDITIONAL_PAGES = 2
 
@@ -220,6 +223,7 @@ async def run_one_time_scan(
     """
     issue_sink = issue_sink or MockIssueSink()
     existing_job = fs.get_job(job_id) if job_id else None
+    logger.info("Scan started: %s (resume=%s)", url, bool(existing_job))
 
     try:
         if existing_job and existing_job.get("pages"):
@@ -231,12 +235,16 @@ async def run_one_time_scan(
         else:
             if job_id is None:
                 job_id = fs.create_job(url)
+            logger.info("[%s] Phase: crawling_entry_page", job_id)
             fs.set_job_phase(job_id, "crawling_entry_page")
             entry_snapshot = await fetch_page(url)
             fs.checkpoint_page_crawled(job_id, url)
+            logger.info("[%s] Phase: selecting_pages (Gemini call)", job_id)
             fs.set_job_phase(job_id, "selecting_pages")
             pages = await select_pages(entry_snapshot)
+            logger.info("[%s] Selected %d page(s) to analyze", job_id, len(pages))
 
+        logger.info("[%s] Phase: analyzing_pages", job_id)
         fs.set_job_phase(job_id, "analyzing_pages")
         results: dict[str, list[VerifiedFinding]] = {}
         for page_url in pages:
@@ -246,15 +254,32 @@ async def run_one_time_scan(
                 continue
             verified = await _process_page(job_id, page_url)
             results[page_url] = verified
+            confirmed_n = sum(1 for v in verified if v.confirmed)
+            logger.info(
+                "[%s] %s: %d finding(s) verified, %d confirmed",
+                job_id, page_url, len(verified), confirmed_n,
+            )
 
+        logger.info("[%s] Phase: ranking_findings (Gemini call)", job_id)
         fs.set_job_phase(job_id, "ranking_findings")
         confirmed_by_page = {
             page_url: [f for f in findings if f.confirmed] for page_url, findings in results.items()
         }
         ranked = await rank_and_recommend(confirmed_by_page)
 
+        logger.info("[%s] Phase: filing_tickets (%d ranked finding(s))", job_id, len(ranked))
         fs.set_job_phase(job_id, "filing_tickets")
         filing = route_and_file(issue_sink, ranked)
+        logger.info(
+            "[%s] Filed %d ticket(s), %d escalated to SME review",
+            job_id, len(filing["filed"]) + len(filing["already_filed"]), len(filing["escalated"]),
+        )
+        for _index, finding, ticket_id in filing["filed"]:
+            logger.info("[%s] Jira ticket filed: %s (WCAG %s)", job_id, ticket_id, finding.wcag_criterion)
+        for _index, finding, escalation_id in filing["escalated"]:
+            logger.info(
+                "[%s] Escalated to SME review: %s (WCAG %s)", job_id, escalation_id, finding.wcag_criterion
+            )
 
         # Build finding index -> ticket (or None if pending SME review),
         # so the report reflects what actually happened rather than a
@@ -269,10 +294,13 @@ async def run_one_time_scan(
             ticket_by_finding[index] = None
             escalation_by_finding[index] = escalation_id
 
+        logger.info("[%s] Phase: generating_report (Gemini call)", job_id)
         fs.set_job_phase(job_id, "generating_report")
         report = await draft_report(url, ranked, ticket_by_finding, escalation_by_finding)
         report_uri = storage_client.save_report(job_id, report)
+        logger.info("[%s] Report saved: %s", job_id, report_uri)
         fs.complete_job(job_id)
+        logger.info("[%s] Scan complete: %s", job_id, url)
 
         notify.summary(
             f"Scan complete: {url}",
