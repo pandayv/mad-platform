@@ -158,7 +158,25 @@ When it's done, you get a score, a severity breakdown, and the full report:
   Manager) and the crawler refuses to fetch private/internal network
   addresses
 
-## Local setup
+## Setting this up yourself
+
+### What you need
+
+- A Google Cloud project with billing enabled.
+- The `gcloud` CLI, installed and authenticated (`gcloud auth login`).
+- Python 3.10+ locally (the ADK toolchain needs it).
+- Optional, for real ticket filing and notifications: a free Jira Cloud
+  account and a Slack workspace. Without these, the pipeline runs against
+  a mock ticket sink and skips notifications, everything else works.
+
+Every command below uses `PROJECT_ID`, set once and reused:
+
+```bash
+export PROJECT_ID=your-project-id
+gcloud config set project "$PROJECT_ID"
+```
+
+### 1. Clone and set up the local environment
 
 ```bash
 git clone https://github.com/pandayv/mad-platform.git
@@ -166,23 +184,219 @@ cd mad-platform
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 playwright install --with-deps chromium
-
-# Requires a GCP project with Vertex AI, Firestore, and Cloud Storage
-# enabled, and application-default credentials configured:
-gcloud auth application-default login
-
-# Run a scan from the CLI (no frontend needed for this):
-python run_scan.py https://example.com
-
-# Or run the web app locally:
-uvicorn mad_platform.web.app:app --port 8080
 ```
 
-See [`SETUP.md`](SETUP.md) for the full GCP provisioning guide.
-[`gcp-deploy.sh`](gcp-deploy.sh) covers the core services, Firestore
-database, Pub/Sub topics, and service accounts; `SETUP.md` has the exact
-commands for the one piece it doesn't cover, the Gemma pattern-miner
-Cloud Run Job.
+### 2. Enable the APIs this project actually uses
+
+```bash
+gcloud services enable \
+  run.googleapis.com firestore.googleapis.com secretmanager.googleapis.com \
+  storage.googleapis.com aiplatform.googleapis.com cloudscheduler.googleapis.com
+```
+
+### 3. Create Firestore and a Cloud Storage bucket
+
+```bash
+gcloud firestore databases create --database=scan-firestore \
+  --location=us-central1 --type=firestore-native
+gcloud storage buckets create "gs://${PROJECT_ID}-reports" --location=us-central1
+```
+
+The Firestore database name is non-default (`scan-firestore`) on purpose,
+so every `firestore.Client(...)` call in this codebase passes
+`database="scan-firestore"` explicitly. Easy to forget if you're used to
+the client library's default; connects to an empty database if missed.
+
+### 4. Authenticate locally and confirm Vertex AI works
+
+```bash
+gcloud auth application-default login
+```
+
+Model availability varies by project; confirm what's actually there
+before assuming a model name works:
+
+```bash
+python -c "from google import genai; c = genai.Client(vertexai=True, project='$PROJECT_ID', location='global'); [print(m.name) for m in c.models.list()]"
+```
+
+The client location must be `global`, not a region like `us-central1`;
+some models list in a region's catalog but 404 when actually called
+there. This is independent of which region Cloud Run itself deploys to.
+
+### 5. Test the pipeline locally, before deploying anything
+
+```bash
+python run_scan.py https://example.com
+```
+
+This exercises the real pipeline end to end against your real GCP
+project (Vertex AI, Firestore) with a mock ticket sink, no Cloud Run
+deployment needed yet. Confirms steps 2-4 actually worked before you
+spend time deploying.
+
+### 6. Create an Artifact Registry repo for the container images
+
+```bash
+gcloud artifacts repositories create mad-platform \
+  --repository-format=docker --location=us-central1
+
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role="roles/artifactregistry.writer"
+```
+
+### 7. Deploy `scan-onboarding` (the public app)
+
+```bash
+gcloud iam service-accounts create scan-onboarding-sa
+SA_ONBOARDING="scan-onboarding-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SA_ONBOARDING}" --role="roles/datastore.user"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SA_ONBOARDING}" --role="roles/aiplatform.user"
+gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}-reports" \
+  --member="serviceAccount:${SA_ONBOARDING}" --role="roles/storage.objectAdmin"
+
+# The one thing standing between the public --allow-unauthenticated
+# endpoint and someone using it as a free Gemini-calling, Playwright-
+# fetching open relay. Real value, never committed:
+openssl rand -hex 12 | gcloud secrets create mad-ui-access-code --data-file=-
+# A separate code for the internal SME review queue -- deliberately not
+# the same code, so having one doesn't imply having the other:
+openssl rand -hex 12 | gcloud secrets create mad-review-code --data-file=-
+for secret in mad-ui-access-code mad-review-code; do
+  gcloud secrets add-iam-policy-binding "$secret" \
+    --member="serviceAccount:${SA_ONBOARDING}" --role="roles/secretmanager.secretAccessor"
+done
+
+gcloud builds submit --tag="us-central1-docker.pkg.dev/${PROJECT_ID}/mad-platform/scan-onboarding" \
+  --region=us-central1 .
+gcloud run deploy scan-onboarding \
+  --image="us-central1-docker.pkg.dev/${PROJECT_ID}/mad-platform/scan-onboarding:latest" \
+  --region=us-central1 --service-account="$SA_ONBOARDING" \
+  --no-cpu-throttling --memory=1Gi --concurrency=4 --max-instances=3 --min-instances=0 \
+  --set-env-vars=GCS_BUCKET_NAME="${PROJECT_ID}-reports" \
+  --set-secrets=MAD_ACCESS_CODE=mad-ui-access-code:latest,MAD_REVIEW_CODE=mad-review-code:latest \
+  --allow-unauthenticated
+```
+
+### 8. Deploy `scan-wcag-poller` and its weekly-freshness Scheduler trigger
+
+Not public. Only a dedicated invoker identity, not the poller's own
+account, can call it, so a compromised poller can't grant itself more
+access than it started with.
+
+```bash
+gcloud iam service-accounts create scan-wcag-poller-sa
+gcloud iam service-accounts create scan-scheduler-invoker-sa
+SA_WCAG="scan-wcag-poller-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+SA_SCHEDULER="scan-scheduler-invoker-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SA_WCAG}" --role="roles/datastore.user"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SA_WCAG}" --role="roles/aiplatform.user"
+
+gcloud builds submit --config=cloudbuild.wcag_poller.yaml --region=us-central1 \
+  --substitutions=_IMAGE="us-central1-docker.pkg.dev/${PROJECT_ID}/mad-platform/scan-wcag-poller:latest" .
+gcloud run deploy scan-wcag-poller \
+  --image="us-central1-docker.pkg.dev/${PROJECT_ID}/mad-platform/scan-wcag-poller:latest" \
+  --region=us-central1 --service-account="$SA_WCAG" --memory=512Mi --max-instances=1
+
+gcloud run services add-iam-policy-binding scan-wcag-poller --region=us-central1 \
+  --member="serviceAccount:${SA_SCHEDULER}" --role="roles/run.invoker"
+
+WCAG_URL=$(gcloud run services describe scan-wcag-poller --region=us-central1 --format='value(status.url)')
+gcloud scheduler jobs create http scan-wcag-poller-tick \
+  --location=us-central1 --schedule="0 */6 * * *" --uri="$WCAG_URL" \
+  --http-method=POST --oidc-service-account-email="$SA_SCHEDULER"
+```
+
+### 9. Deploy the Gemma pattern-miner (a Cloud Run Job, not a Service)
+
+Self-hosted Gemma (Ollama, not Vertex AI), baked into its own image,
+run-to-completion rather than request-driven, since this is a periodic
+batch job with no live-request latency to protect.
+
+```bash
+gcloud iam service-accounts create pattern-miner-sa
+SA_MINER="pattern-miner-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SA_MINER}" --role="roles/datastore.user"
+
+# Slower than the other two images on purpose: bakes gemma3:4b into the
+# image at build time (~5-10 min) so each execution doesn't pull it fresh.
+gcloud builds submit --config=cloudbuild.pattern_miner.yaml --region=us-central1 \
+  --substitutions=_IMAGE="us-central1-docker.pkg.dev/${PROJECT_ID}/mad-platform/pattern-miner:latest" .
+gcloud run jobs create pattern-miner \
+  --image="us-central1-docker.pkg.dev/${PROJECT_ID}/mad-platform/pattern-miner:latest" \
+  --region=us-central1 --service-account="$SA_MINER" \
+  --memory=4Gi --cpu=4 --task-timeout=600 --max-retries=0
+
+gcloud run jobs add-iam-policy-binding pattern-miner --region=us-central1 \
+  --member="serviceAccount:${SA_SCHEDULER}" --role="roles/run.invoker"
+
+# Weekly: dismissal history accumulates slowly relative to scan volume.
+gcloud scheduler jobs create http pattern-miner-tick \
+  --location=us-central1 --schedule="0 3 * * 0" \
+  --uri="https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${PROJECT_ID}/jobs/pattern-miner:run" \
+  --http-method=POST --oauth-service-account-email="$SA_SCHEDULER" \
+  --oauth-token-scope="https://www.googleapis.com/auth/cloud-platform"
+```
+
+To see it run immediately rather than waiting for the schedule:
+`gcloud run jobs execute pattern-miner --region=us-central1 --wait`.
+
+### 10. Optional: connect Jira and Slack
+
+Jira, for real ticket filing instead of the mock sink. Create an API
+token at `id.atlassian.com/manage-profile/security/api-tokens`, then:
+
+```bash
+printf '%s' "https://YOUR-SITE.atlassian.net" | gcloud secrets create jira-url --data-file=-
+printf '%s' "you@example.com" | gcloud secrets create jira-email --data-file=-
+printf '%s' "YOUR_API_TOKEN" | gcloud secrets create jira-api-token --data-file=-
+printf '%s' "YOUR_PROJECT_KEY" | gcloud secrets create jira-project-key --data-file=-
+```
+
+Slack, for real-time alerts and scan-complete summaries. Create an
+Incoming Webhook at `api.slack.com/apps` (your app, then Incoming
+Webhooks), then:
+
+```bash
+printf '%s' "https://hooks.slack.com/services/YOUR/WEBHOOK/URL" | \
+  gcloud secrets create slack-webhook-url --data-file=-
+```
+
+Grant access and redeploy `scan-onboarding` with the new secrets:
+
+```bash
+for secret in jira-url jira-email jira-api-token jira-project-key slack-webhook-url; do
+  gcloud secrets add-iam-policy-binding "$secret" \
+    --member="serviceAccount:${SA_ONBOARDING}" --role="roles/secretmanager.secretAccessor"
+done
+gcloud secrets add-iam-policy-binding slack-webhook-url \
+  --member="serviceAccount:${SA_MINER}" --role="roles/secretmanager.secretAccessor"
+
+gcloud run deploy scan-onboarding \
+  --image="us-central1-docker.pkg.dev/${PROJECT_ID}/mad-platform/scan-onboarding:latest" \
+  --region=us-central1 --service-account="$SA_ONBOARDING" \
+  --no-cpu-throttling --memory=1Gi --concurrency=4 --max-instances=3 --min-instances=0 \
+  --set-env-vars=GCS_BUCKET_NAME="${PROJECT_ID}-reports" \
+  --set-secrets=MAD_ACCESS_CODE=mad-ui-access-code:latest,MAD_REVIEW_CODE=mad-review-code:latest,JIRA_URL=jira-url:latest,JIRA_EMAIL=jira-email:latest,JIRA_API_TOKEN=jira-api-token:latest,JIRA_PROJECT_KEY=jira-project-key:latest,SLACK_WEBHOOK_URL=slack-webhook-url:latest \
+  --allow-unauthenticated
+```
+
+### 11. Verify
+
+```bash
+gcloud run services describe scan-onboarding --region=us-central1 --format='value(status.url)'
+```
+
+Open that URL, submit a real site to scan, and confirm it completes.
 
 ## Project structure
 
@@ -202,8 +416,7 @@ review_escalations.py          # SME review queue CLI (web UI is the primary sur
 check_wcag_version.py          # Manual trigger for the WCAG freshness check
 mine_patterns.py               # Manual trigger for the Gemma pattern miner
 Dockerfile / Dockerfile.wcag_poller / Dockerfile.pattern_miner
-SETUP.md                       # GCP provisioning guide
-gcp-deploy.sh / gcp-cleanup.sh # Infrastructure-as-code (core services)
+cloudbuild.wcag_poller.yaml / cloudbuild.pattern_miner.yaml
 ```
 
 ## Built during the hackathon submission window

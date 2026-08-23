@@ -15,7 +15,7 @@ import os
 from google.cloud import storage
 
 _PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "project-d7e6174e-cca7-4d16-9d5")
-_BUCKET_NAME = "scan-storage-9747"
+_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", "scan-storage-9747")
 
 _client = storage.Client(project=_PROJECT)
 _bucket = _client.bucket(_BUCKET_NAME)
