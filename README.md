@@ -48,13 +48,13 @@ what's actually running, not just stated intent.
   evidence before it's trusted, not just re-summarized.
 - WCAG citations are grounded in retrieved standard text (RAG), not a
   model's unverified recollection.
-- One of the three parallel checks is genuinely multimodal: real rendered
-  screenshots judged by Gemini vision, not just the markup.
+- Every page gets three parallel checks: rule-based, semantic, and
+  multimodal visual check, reasoning over the actual rendered screenshot.
 
 ### Fit for purpose
 - Three-tier model selection: `flash-lite` for high-volume calls, `flash`
-  for judgment calls worth the cost, and a self-hosted Gemma for the one
-  background job with no latency pressure.
+  for judgment calls worth the cost, and a self-hosted Gemma for a
+  background job mining dismissal patterns.
 - Orchestration pattern chosen per step: sequential where order matters,
   parallel where it doesn't, dynamic delegation reserved for genuine
   judgment calls.
@@ -65,23 +65,18 @@ what's actually running, not just stated intent.
 
 ### Autonomy with accountability
 - Every irreversible action is idempotent, human-gated, or both; if a
-  scan is interrupted and resumed, a page that's already been verified
-  never gets silently redone.
-- Four least-privilege service accounts, one per component, per-secret
-  access, two genuinely separate trust boundaries, and an SSRF guard that
-  has blocked a real attack attempt in production.
-- Two layers of audit trail: Google Cloud's own Audit Logs capture every
-  infrastructure action automatically, and the pipeline's own data is
-  never overwritten, so every finding, dismissal, and confirmed pattern
-  keeps its full history.
+  scan is resumed after interruption, it resumes past what is already
+  completed.
+- Least privilege applies at every layer.
+- The crawler refuses to fetch private, internal, or cloud-metadata
+  addresses to protect from threats.
+- Two layers of audit trail: Google Cloud's own Audit Logs for
+  infrastructure action, and the pipeline's own record.
 
 ### Self-improving
 - A self-hosted Gemma model mines Editor's real dismissal history for
   recurring, consistent patterns; confirmed ones become permanent
   grounding for every scan that follows, not a one-time fix.
-- Runs against this project's own real usage history, not a synthetic
-  example set, so a confirmed pattern reflects something that genuinely
-  happened many times, not a scenario built to demo well.
 - The WCAG knowledge base heals itself the same way: a scheduled check
   keeps it current, refreshing automatically for minor changes and
   asking a person first for anything structural.
