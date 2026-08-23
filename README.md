@@ -65,9 +65,9 @@ what's actually running, not just stated intent.
 - Every irreversible action is idempotent, human-gated, or both; a crash
   or redeploy resumes from the last completed checkpoint instead of
   restarting or duplicating work.
-- Six least-privilege service accounts, per-secret access, two genuinely
-  separate trust boundaries, and an SSRF guard that has blocked a real
-  attack attempt in production.
+- Four least-privilege service accounts, one per component, per-secret
+  access, two genuinely separate trust boundaries, and an SSRF guard that
+  has blocked a real attack attempt in production.
 - Two layers of audit trail: Google Cloud's own Audit Logs capture every
   infrastructure action automatically, and the pipeline's own data is
   never overwritten, so every finding, dismissal, and confirmed pattern
@@ -138,9 +138,9 @@ When it's done, you get a score, a severity breakdown, and the full report:
   Cloud Run Job) for the one background batch job (dismissal-pattern
   mining) that has no live-latency pressure
 - **Agent framework:** Google Agent Development Kit (ADK)
-- **Compute:** Cloud Run, four scale-to-zero services split by trigger
-  type and resource profile, plus one Cloud Run Job for the Gemma batch
-  miner
+- **Compute:** Cloud Run, two scale-to-zero services (`scan-onboarding`,
+  `scan-wcag-poller`) split by trigger type and resource profile, plus
+  one Cloud Run Job (`pattern-miner`) for the Gemma batch miner
 - **State:** Firestore, for job checkpoints, findings, escalation queue,
   WCAG knowledge-base embeddings, and confirmed learned patterns
 - **Storage:** Cloud Storage, for generated reports
