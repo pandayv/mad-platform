@@ -47,8 +47,7 @@ what's actually running, not just stated intent.
 - Editor independently re-checks every Analyst finding against actual
   evidence before it's trusted, not just re-summarized.
 - WCAG citations are grounded in retrieved standard text (RAG), not a
-  model's unverified recollection; one embedding call grounds a whole
-  page's findings, not one call per finding.
+  model's unverified recollection.
 - One of the three parallel checks is genuinely multimodal: real rendered
   screenshots judged by Gemini vision, not just the markup.
 
@@ -65,11 +64,9 @@ what's actually running, not just stated intent.
   what that call actually needs, not the full page dumped in.
 
 ### Autonomy with accountability
-- Every irreversible action is idempotent, human-gated, or both; a page's
-  checkpoint only ever moves forward, never silently regresses on a
-  resume; and every model call, across three separate integration paths
-  (Gemini direct, ADK, self-hosted Gemma), carries the same bounded
-  timeout and retry, so no call in the pipeline can hang or fail silently.
+- Every irreversible action is idempotent, human-gated, or both; if a
+  scan is interrupted and resumed, a page that's already been verified
+  never gets silently redone.
 - Four least-privilege service accounts, one per component, per-secret
   access, two genuinely separate trust boundaries, and an SSRF guard that
   has blocked a real attack attempt in production.
