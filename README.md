@@ -1,8 +1,9 @@
 # MAD Platform
 
-**An autonomous agent that scans a website for accessibility problems,
+**Multi-Agent Defense Platform, for accessibility compliance.** An
+autonomous agent that scans a website for accessibility problems,
 verifies its own findings, and takes real action on what's confirmed, not
-just a report.**
+just a report.
 
 Built for the [All Things Agentic Hackathon](https://allthingsagentichackathon.devpost.com/)
 on Gemini, Google's Agent Development Kit (ADK), and Google Cloud.
