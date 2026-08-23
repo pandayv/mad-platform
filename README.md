@@ -16,6 +16,11 @@ on Gemini, Google's Agent Development Kit (ADK), and Google Cloud.
 paste in a URL and watch it scan. Access is gated by a code (a
 deliberate security measure, see *Tech stack* below).
 
+**[Internal review queue](https://scan-onboarding-803013053073.us-central1.run.app/review):**
+where the low-confidence or critical findings the pipeline can't fully
+autonomize land for a human to confirm or dismiss. Gated by a separate
+code from the scan form above, intentionally not customer-facing.
+
 **[Guardian Pest Control](https://pandayv.github.io/mad-platform/):** a
 small fictional business site, seeded with real accessibility violations,
 built to give the scanner a consistent, reliable target ([`docs/`](docs/)).
@@ -67,7 +72,9 @@ what's actually running, not just stated intent.
 - Every irreversible action is idempotent, human-gated, or both; if a
   scan is resumed after interruption, it resumes past what is already
   completed.
-- Least privilege applies at every layer.
+- Least privilege applies at every layer: every part of the system can
+  only touch what its job requires, and the customer-facing tool and the
+  internal review tool don't share access at all.
 - The crawler refuses to fetch private, internal, or cloud-metadata
   addresses to protect from threats.
 - Two layers of audit trail: Google Cloud's own Audit Logs for
