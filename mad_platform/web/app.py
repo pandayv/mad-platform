@@ -34,7 +34,20 @@ from mad_platform.state import storage_client
 from mad_platform.tools.issue_sink import IssueSink, JiraIssueSink, MockIssueSink
 from mad_platform.web import theme
 
-logging.basicConfig(level=logging.INFO)
+# Not logging.basicConfig(): uvicorn configures its own logging on startup,
+# which runs after this module is imported and silently drops INFO-level
+# output from our own loggers on a cold start if we rely on basicConfig()
+# alone -- confirmed in production, phase logs vanished on cold-started
+# instances while uvicorn's own access logs kept working fine. Attaching a
+# handler directly to the "mad_platform" namespace, independent of the
+# root logger uvicorn manages, survives that.
+_handler = logging.StreamHandler()
+_handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+_mad_logger = logging.getLogger("mad_platform")
+_mad_logger.setLevel(logging.INFO)
+_mad_logger.addHandler(_handler)
+_mad_logger.propagate = False
+
 logger = logging.getLogger("mad_platform.web")
 
 app = FastAPI(title="MAD Platform")
