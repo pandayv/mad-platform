@@ -25,16 +25,22 @@ change does before the knowledge base auto-updates.
 from __future__ import annotations
 
 import hashlib
+import os
 from collections import defaultdict
 
 from pydantic import BaseModel
 
 from mad_platform.state import firestore_client as fs
 from mad_platform.tools import gemma_client
+from mad_platform.tools import notify
 
 MIN_OCCURRENCES = 3  # fewer than this isn't a pattern, just one editor call
 SAMPLE_SIZE = 6  # rationales shown to Gemma per cluster -- enough to judge consistency, not the whole history
 CONFIDENCE_THRESHOLD = 0.75
+
+_APP_BASE_URL = os.environ.get(
+    "MAD_APP_BASE_URL", "https://scan-onboarding-803013053073.us-central1.run.app"
+)
 
 
 class _PatternAssessment(BaseModel):
@@ -117,6 +123,14 @@ async def mine_patterns() -> list[dict]:
                 "occurrence_count": len(findings),
                 "sample_rationales": [f["rationale"] for f in sample],
             },
+        )
+        notify.alert(
+            "New pattern mined, needs SME review",
+            [
+                f"WCAG {code} -- seen {len(findings)} time(s), confidence {assessment.confidence:.2f}",
+                assessment.pattern_description,
+                f"Review: {_APP_BASE_URL}/review/{key}",
+            ],
         )
         created.append({"wcag_criterion": code, "occurrence_count": len(findings)})
 

@@ -26,6 +26,7 @@ PRODUCT_OVERVIEW.md
 SUBMISSION_TEXT.md
 MASTER_CONTEXT.md
 VIDEO_SCRIPT.md
+architecture_diagrams/
 
 # Claude Code local session state
 .claude/
