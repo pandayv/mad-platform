@@ -1,7 +1,7 @@
 """Manual/demo entry point for the WCAG freshness-check loop
 (mad_platform/agents/wcag_auto_heal.py) -- the same logic the real
 Cloud Scheduler tick runs against scan-wcag-poller, runnable directly
-without waiting up to 6 hours for a real tick.
+without waiting up to a day for a real tick.
 
 Usage:
     .venv/bin/python check_wcag_version.py                    # real check

@@ -149,7 +149,7 @@ When it's done, you get a score, a severity breakdown, and the full report:
   WCAG knowledge-base embeddings, and confirmed learned patterns
 - **Storage:** Cloud Storage, for generated reports
 - **Scheduling:** Cloud Scheduler, driving the WCAG freshness check
-  (every 6h) and the dismissal-pattern miner (weekly)
+  (daily) and the dismissal-pattern miner (weekly)
 - **Browser automation:** Playwright, for headless rendering, screenshots,
   and computed-style extraction for real contrast-ratio checking
 - **Web:** FastAPI, powering the scan-submission UI and status API
@@ -287,7 +287,7 @@ gcloud run deploy scan-onboarding \
   --allow-unauthenticated
 ```
 
-### 8. Deploy `scan-wcag-poller` and its weekly-freshness Scheduler trigger
+### 8. Deploy `scan-wcag-poller` and its daily-freshness Scheduler trigger
 
 Not public. Only a dedicated invoker identity, not the poller's own
 account, can call it, so a compromised poller can't grant itself more
@@ -315,7 +315,7 @@ gcloud run services add-iam-policy-binding scan-wcag-poller --region=us-central1
 
 WCAG_URL=$(gcloud run services describe scan-wcag-poller --region=us-central1 --format='value(status.url)')
 gcloud scheduler jobs create http scan-wcag-poller-tick \
-  --location=us-central1 --schedule="0 */6 * * *" --uri="$WCAG_URL" \
+  --location=us-central1 --schedule="0 4 * * *" --uri="$WCAG_URL" \
   --http-method=POST --oidc-service-account-email="$SA_SCHEDULER"
 ```
 
