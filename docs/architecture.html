@@ -181,7 +181,7 @@ footer { margin-top: 24px; font-size: 12.5px; color: var(--ink-soft); font-famil
 <header>
   <div class="eyebrow">System Architecture</div>
   <h1>MAD Platform</h1>
-  <div class="dek">Every service, agent, data store, and feedback loop, in one picture, laid out as four lanes. Lane 2, the core review pipeline, runs left to right through the middle: Orchestrator fans a page out to three parallel Analyst checks, Editor verifies each flag, a capped one-pass retry catches low-confidence results, then Reporter and Action Agent close the loop. Uncertain findings, WCAG version changes, and mined dismissal patterns all route through one SME Central Review Hub in Lane 1. Lane 4 runs the two async self-improvement loops (WCAG freshness, pattern mining) that ground the live pipeline going forward.</div>
+  <div class="dek">The full system in one picture. Walkthrough below.</div>
 </header>
 
 <div class="legend">
@@ -195,7 +195,6 @@ footer { margin-top: 24px; font-size: 12.5px; color: var(--ink-soft); font-famil
 <div class="diagram-frame">
 <img src="architecture-diagram.svg" alt="MAD Platform architecture diagram, four lanes. Lane 1: a Live Web App URL entry point, and an SME Central Review Hub with three sub-queues (Live Review Queue for low-confidence triage, Structural Review, Prompt Review Queue for pattern approvals). Lane 2, the core live pipeline: Orchestrator Agent fans out to Analyst Agent's three parallel checks (Rule Checks, Visual AI, Semantic AI), which merge into Editor Agent, then a Retry Gate capped at one pass, then Reporter Agent, then a Route and Act escalation gate that either goes to Action Agent directly (high confidence) or to the SME Live Review Queue (low confidence); Action Agent files Jira tickets and posts Slack notifications. Lane 3: Cloud Storage for HTML reports and Firestore for async status logs. Lane 4: two scheduled loops, a daily WCAG freshness check (fetch current WCAG version, classify the change, auto-refresh the vector knowledge base) and a weekly Cloud Run Job running a self-hosted Gemma model that mines dismissal patterns, checks them against existing patterns, and once an SME approves, grounds Editor Agent's prompt with the optimized rules.">
 </div>
-<figcaption>One SME Central Review Hub for every kind of human decision in the system: live findings, structural review, and pattern-approval requests all land in the same place.</figcaption>
 <div class="diagram-links"><a href="architecture-diagram.svg">Open full-resolution SVG</a> &middot; <a href="architecture-diagram.png">PNG</a></div>
 </figure>
 

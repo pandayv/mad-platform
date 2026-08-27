@@ -125,15 +125,6 @@ When it's done, you get a score, a severity breakdown, and the full report:
 
 ![Completed scan result](assets/screenshot-completed.png)
 
-## Product layer vs. platform layer
-
-- **Product layer (built):** a place to come check your website's
-  accessibility and get an actionable report: one-time, on-demand, no
-  registration required. Everything above is this layer.
-- **Platform layer (on the roadmap):** registering a site for *ongoing*
-  monitoring, detecting when a registered site's code changes, and the
-  recurring scheduling that ties it together.
-
 ## Tech stack
 
 - **AI:** Gemini via Vertex AI (`gemini-3.5-flash-lite` for high-volume
@@ -422,6 +413,24 @@ mine_patterns.py               # Manual trigger for the Gemma pattern miner
 Dockerfile / Dockerfile.wcag_poller / Dockerfile.pattern_miner
 cloudbuild.wcag_poller.yaml / cloudbuild.pattern_miner.yaml
 ```
+
+## Scalability & roadmap
+
+What's built today is the product layer: check a site's accessibility
+on-demand, one-time, no registration. The natural next layer is
+registering a site for *recurring* monitoring instead of a single scan,
+and it's a smaller step than it sounds, since the scheduling and
+self-improvement infrastructure it would reuse is already running in
+production: the WCAG freshness check and the Gemma pattern-miner both
+already operate as independent Cloud Scheduler ticks against live state,
+not one-off scripts.
+
+Two real problems would need solving first, not just wiring a cron job:
+making a recurring scan's ticket-filing idempotent across separate runs
+(today's idempotency guard is per-scan, not per-site-over-time), and
+deciding how the SME review queue should weigh a site's own review
+history, so a pattern a reviewer already confirmed on that site doesn't
+re-escalate identically on every future run.
 
 ## Built during the hackathon submission window
 
