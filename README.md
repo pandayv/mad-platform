@@ -29,6 +29,26 @@ built to give the scanner a consistent, reliable target ([`docs/`](docs/)).
 the full pipeline, the WCAG auto-heal loop, and the Google Cloud
 infrastructure behind it.
 
+### Testing it yourself
+
+This repo is private for judging, so here's the fast path to seeing it
+work end to end. Access codes for the scanner and review queue are
+provided in the Devpost submission, not here.
+
+1. Open the live scanner above, enter the access code, and submit a
+   URL. The demo site works well, or try any real one.
+2. Watch the status page track live progress. A multi-page scan usually
+   finishes in under a minute.
+3. On the completed report, every confirmed finding shows a
+   "Filed: [ticket key]" badge, a real Jira ticket created live by that
+   scan, no Jira account needed to see it.
+4. Anything marked "Awaiting internal review" can be resolved at the
+   review queue above. Confirming or dismissing it updates the report's
+   badge in real time.
+
+Slack alerts post to a private workspace channel and can't be opened by
+an outside tester; see the demo video for that part.
+
 ## The problem
 
 Website-accessibility lawsuits (ADA-related, in the US) are a real and
