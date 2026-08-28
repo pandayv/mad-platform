@@ -12,7 +12,7 @@ on Gemini, Google's Agent Development Kit (ADK), and Google Cloud.
 
 ## Try it live
 
-**[scan-onboarding-803013053073.us-central1.run.app](https://scan-onboarding-803013053073.us-central1.run.app):**
+**[Live scanner](https://scan-onboarding-803013053073.us-central1.run.app):**
 paste in a URL and watch it scan. Access is gated by a code (a
 deliberate security measure, see *Tech stack* below).
 
