@@ -31,14 +31,15 @@ infrastructure behind it.
 
 ### Testing it yourself
 
-This repo is private for judging, so here's the fast path to seeing it
-work end to end. Access codes for the scanner and review queue are
-provided in the Devpost submission, not here.
+Here's the fast path to seeing it work end to end. Access codes for the
+scanner and review queue are provided in the Devpost submission, not
+here.
 
 1. Open the live scanner above, enter the access code, and submit a
    URL. The demo site works well, or try any real one.
 2. Watch the status page track live progress. A multi-page scan usually
-   finishes in under a minute.
+   takes one to three minutes, depending on how many pages get selected
+   and real-time model latency.
 3. On the completed report, every confirmed finding shows a
    "Filed: [ticket key]" badge, a real Jira ticket created live by that
    scan, no Jira account needed to see it.
