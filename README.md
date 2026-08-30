@@ -185,15 +185,17 @@ When it's done, you get a score, a severity breakdown, and the full report:
   account and a Slack workspace. Without these, the pipeline runs against
   a mock ticket sink and skips notifications, everything else works.
 
-Every command below uses `PROJECT_ID`, set once and reused. `GOOGLE_CLOUD_PROJECT`
-and `GCS_BUCKET_NAME` are also required: the app's Firestore and Storage clients
-read them directly and each falls back to a hardcoded project/bucket if unset,
-so skipping these lines means every write silently targets the wrong place
-instead of failing loudly, including when testing locally in step 5, not just
-once deployed.
+Replace `YOUR_PROJECT_ID` below with your actual GCP project ID, the only
+value you need to choose here. `GOOGLE_CLOUD_PROJECT` and `GCS_BUCKET_NAME`
+aren't separate inputs, they're derived from it automatically on the next two
+lines, but they're just as required: the app's Firestore and Storage clients
+read them directly and each falls back to a hardcoded project/bucket if
+unset, so skipping these lines means every write silently targets the wrong
+place instead of failing loudly, including when testing locally in step 5,
+not just once deployed.
 
 ```bash
-export PROJECT_ID=your-project-id
+export PROJECT_ID=YOUR_PROJECT_ID
 export GOOGLE_CLOUD_PROJECT="$PROJECT_ID"
 export GCS_BUCKET_NAME="${PROJECT_ID}-reports"
 gcloud config set project "$PROJECT_ID"
@@ -286,17 +288,16 @@ gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}-reports" \
 
 # The one thing standing between the public --allow-unauthenticated
 # endpoint and someone using it as a free Gemini-calling, Playwright-
-# fetching open relay. This isn't meant to be a locked-down production
-# secret, it's the same code already shared in the Devpost submission,
-# set explicitly here so a fresh deploy reproduces the exact same access
-# codes a judge is testing against. printf, not openssl rand, on purpose:
-# `openssl rand -hex 12 | gcloud secrets create ...` stores a trailing
-# newline in the secret value that the app's comparison never strips, so
-# the code it generates can never actually be typed back in correctly.
-printf 'madp2026' | gcloud secrets create mad-ui-access-code --data-file=-
+# fetching open relay. Replace YOUR_ACCESS_CODE and YOUR_REVIEW_CODE
+# with your own values, or the ones from the Devpost submission to
+# reproduce the exact demo a judge is testing. printf, not
+# `openssl rand -hex 12`, which stores a trailing newline the app's
+# comparison never strips, so the code it generates could never
+# actually be typed back in correctly.
+printf '%s' "YOUR_ACCESS_CODE" | gcloud secrets create mad-ui-access-code --data-file=-
 # A separate code for the internal SME review queue -- deliberately not
 # the same code, so having one doesn't imply having the other:
-printf 'admin2026' | gcloud secrets create mad-review-code --data-file=-
+printf '%s' "YOUR_REVIEW_CODE" | gcloud secrets create mad-review-code --data-file=-
 for secret in mad-ui-access-code mad-review-code; do
   gcloud secrets add-iam-policy-binding "$secret" \
     --member="serviceAccount:${SA_ONBOARDING}" --role="roles/secretmanager.secretAccessor"
@@ -389,7 +390,7 @@ token at `id.atlassian.com/manage-profile/security/api-tokens`, then:
 
 ```bash
 printf '%s' "https://YOUR-SITE.atlassian.net" | gcloud secrets create jira-url --data-file=-
-printf '%s' "you@example.com" | gcloud secrets create jira-email --data-file=-
+printf '%s' "YOUR_JIRA_EMAIL" | gcloud secrets create jira-email --data-file=-
 printf '%s' "YOUR_API_TOKEN" | gcloud secrets create jira-api-token --data-file=-
 printf '%s' "YOUR_PROJECT_KEY" | gcloud secrets create jira-project-key --data-file=-
 ```
