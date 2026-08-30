@@ -186,13 +186,16 @@ When it's done, you get a score, a severity breakdown, and the full report:
   a mock ticket sink and skips notifications, everything else works.
 
 Every command below uses `PROJECT_ID`, set once and reused. `GOOGLE_CLOUD_PROJECT`
-is also required: the app's Firestore and Storage clients read it directly and
-fall back to a hardcoded project if it's unset, so skipping this line means
-every write silently targets the wrong project instead of failing loudly.
+and `GCS_BUCKET_NAME` are also required: the app's Firestore and Storage clients
+read them directly and each falls back to a hardcoded project/bucket if unset,
+so skipping these lines means every write silently targets the wrong place
+instead of failing loudly, including when testing locally in step 5, not just
+once deployed.
 
 ```bash
 export PROJECT_ID=your-project-id
 export GOOGLE_CLOUD_PROJECT="$PROJECT_ID"
+export GCS_BUCKET_NAME="${PROJECT_ID}-reports"
 gcloud config set project "$PROJECT_ID"
 ```
 
