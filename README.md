@@ -185,14 +185,15 @@ When it's done, you get a score, a severity breakdown, and the full report:
   account and a Slack workspace. Without these, the pipeline runs against
   a mock ticket sink and skips notifications, everything else works.
 
-Replace `YOUR_PROJECT_ID` below with your actual GCP project ID, the only
-value you need to choose here. `GOOGLE_CLOUD_PROJECT` and `GCS_BUCKET_NAME`
-aren't separate inputs, they're derived from it automatically on the next two
-lines, but they're just as required: the app's Firestore and Storage clients
-read them directly and each falls back to a hardcoded project/bucket if
-unset, so skipping these lines means every write silently targets the wrong
-place instead of failing loudly, including when testing locally in step 5,
-not just once deployed.
+**IMPORTANT:** Replace `YOUR_PROJECT_ID` below with your actual GCP project
+ID, the only value you need to choose here.
+
+`GOOGLE_CLOUD_PROJECT` and `GCS_BUCKET_NAME` aren't separate inputs, they're
+derived from it automatically on the next two lines, but they're just as
+required: the app's Firestore and Storage clients read them directly and
+each falls back to a hardcoded project/bucket if unset, so skipping these
+lines means every write silently targets the wrong place instead of failing
+loudly, including when testing locally in step 5, not just once deployed.
 
 ```bash
 export PROJECT_ID=YOUR_PROJECT_ID
@@ -275,6 +276,10 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 ### 7. Deploy `scan-onboarding` (the public app)
 
+**IMPORTANT:** Replace `YOUR_ACCESS_CODE` and `YOUR_REVIEW_CODE` below with
+your own values, or the ones from the Devpost submission to reproduce the
+exact demo a judge is testing.
+
 ```bash
 gcloud iam service-accounts create scan-onboarding-sa
 SA_ONBOARDING="scan-onboarding-sa@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -288,12 +293,9 @@ gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}-reports" \
 
 # The one thing standing between the public --allow-unauthenticated
 # endpoint and someone using it as a free Gemini-calling, Playwright-
-# fetching open relay. Replace YOUR_ACCESS_CODE and YOUR_REVIEW_CODE
-# with your own values, or the ones from the Devpost submission to
-# reproduce the exact demo a judge is testing. printf, not
-# `openssl rand -hex 12`, which stores a trailing newline the app's
-# comparison never strips, so the code it generates could never
-# actually be typed back in correctly.
+# fetching open relay. printf, not `openssl rand -hex 12`, which stores
+# a trailing newline the app's comparison never strips, so the code it
+# generates could never actually be typed back in correctly.
 printf '%s' "YOUR_ACCESS_CODE" | gcloud secrets create mad-ui-access-code --data-file=-
 # A separate code for the internal SME review queue -- deliberately not
 # the same code, so having one doesn't imply having the other:
